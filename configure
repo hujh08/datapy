@@ -63,7 +63,9 @@ install:
 	cp *.py \$(moddir)
 EOF
 
-for subd in io
+# subfolders
+subds=(io plot)
+for subd in "${subds[@]}"
 do
     echo "cp dir: $subd ==> $libdir/$package/$subd"
 
@@ -71,6 +73,7 @@ do
     echo -e "\tcp -r $subd/* \$(moddir)/$subd" >> $makef
 done
 
+# other tasks
 echo >>$makef
 echo "clean:">>$makef
 echo -e "\trm -rf \$(moddir)/*">>$makef
