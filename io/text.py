@@ -12,7 +12,8 @@ import pandas as pd
 # read text
 def load_txt(fileobj, line_nrow=None, header_comment=False,
                 delim_whitespace=True, comment='#', 
-                fields=None, **kwargs):
+                fields=None, map_to_srccols=None,
+                **kwargs):
     '''
         load text file
 
@@ -44,8 +45,19 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
                             and whitespace separation in head line
 
             fields: list-like or callable, optional
-                columns to extract,
-                    alias of `usecols`
+                columns to output,
+
+                In most cases, it is just alias of `usecols`
+                    also columns in output
+                if `map_to_srccols` given (and `fields` is list-like),
+                    column names in source text file are different
+
+            map_to_srccols: dict or None
+                map name in `fields` to one in source text file
+
+                only work for list-like `fields`
+                Case when `fields` is callable, underlying logic is kind of complicated
+                    `df.rename` after loading might be a simpler solution
     '''
     skiprows=set()   #  for nrows and header line
     if line_nrow is not None:  # if given, fetch it
@@ -98,6 +110,12 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
                     t=list(range(t))
                 kwargs['skiprows']=skiprows.union(list(t))
 
+    # fields, map to columns in source text
+    if map_to_srccols is not None:
+        assert isinstance(map_to_srccols, dict)
+        assert hasattr(fields, '__iter__') # only work for list-like `fields`
+        fields=[map_to_srccols.get(t, t) for t in fields]
+
     # alias of keywords
     if fields is not None:
         assert 'usecols' not in kwargs  # avoid conflict
@@ -105,8 +123,15 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
         kwargs['usecols']=fields
 
     # load text through `pd.read_csv`
-    return pd.read_csv(fileobj, delim_whitespace=delim_whitespace,
+    df=pd.read_csv(fileobj, delim_whitespace=delim_whitespace,
                 comment=comment, **kwargs)
+
+    # resume name given in `fields`
+    if map_to_srccols is not None:
+        rename={v: k for k, v in map_to_srccols.items()}
+        df=df.rename(columns=rename)
+
+    return df
 
 ## auxiliary functions
 def read_nth_line(fileobj, n, restore_stream=False):
