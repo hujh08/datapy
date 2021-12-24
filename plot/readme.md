@@ -1,14 +1,13 @@
 layout of axes
 
 # Motivation
-Many constraints should be considered when putting axes in figure, like ax size, or separation between axes to avoid to cover axis label.
 
-To handle these constraint generally, layout of axes is viewed as colletion of rectangles, each for an ax. A rectangle could be specified by coordinates of its bottom-left and top-right corner, (x0, y0) and (x1, y1) respectively. These four numbers (x0, x1, y0, y1) could be splitted into two pairs, (x0, x1) and (y0, y1), and each could be seen as points in a 1d line, along x direction or y direction. Meanwhile, constraint to ax size or separation could be fully transferred to constraint at distance between these pairs, without any loss.
+This module aims to provide flexible method to create figure and put axes in it.
 
-Starting from this, all these 1d points of axes, including two independent sets (xs, ...) and (ys, ...), are managed in a directed graph-like method. Corresponding graph edge is the distance between point pair. And all distances are also managed as graph. Constraint is then implemented as the graph edge.
+For figure creating, main parameters to determine are figure size, `(width, height)` in **inch**es, and resolution `dpi`, dots (**pixel**) per inch. These two properties together give the number of pixels in a figure. Another unit of size is **point**. In typography, a point is 1/72 inches. It uses same setup in `matplotlib` (see [transforms tutorial](https://matplotlib.org/stable/tutorials/advanced/transforms_tutorial.html) or the code `text:_AnnotationBase._get_xy_transform`, coping with `xycoords = 'figure points'`). Many elements in `matplotlib` is specified for size in points, e.g. line, text and marker, et. al. (***NOTE***: marker size in `scatter` has unit `points**2`, which corresponds to marker area, instead of 1d size).
 
-For distances, besides one between point pair, some absolute distances are also considered, like unit `pt`, `inch`. And constraints on distance are all considered relatively to another distance, pair one or absolute unit. Distances in x and y direction are considered together, connected by absolute unit or aspect of ax, e.g. `equal`.
+Layout of axes in figure means essentially to decide its position with respect to figure. During this process, many constraints should be considered, like axes size in order to hold neccessary elements, and separation between axes to avoid to cover axis label.
 
-# Point
+In `matplotlib`, layout via `gridspec` needs to preceding calculation, considering these constraints, for some parameters, e.g. `hspace`, `wspace`. Although this calculation may be simple, in actual case, computing procedure should be carefully designly.
 
-# Distance
+To get around these inconveniences, this module provides a flexible way to cope with these constraints generally. It is raised from thought that position of axes is exactly set by 4 variants `(x0, y0, x1, y1)`, the coordinates of bottom-left and top-right corner, and (almost) all constraints are linear for these variants. A typical constraint is ratio between distance. For example, width of two axes, written as `a0` and `a1`, with coordinates `(a0x0, a0y0, a0x1, a0y1)` and `(a1x0, a1y0, a1x1, a1y1)` respectively. Then widths of them are `a0x1-a0x0` and `a1x1-a1x0`. If we require a ratio `1:k`, constraint is `a0x1-a0x0 = (a1x1-a1x0)/k`, which is linear. Another frequently-used constraint is to align two axes in some axis, e.g. `x-axis`. Using previous example, aligning left of axes `a0` and `a1` is represented as `a0x0 = a1x0`. In this module, coordinate variants and linear constraints are traced and maintained dynamically.
