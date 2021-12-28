@@ -66,6 +66,11 @@ class imgMarker:
                 self.load_img_dir(imgs)
             else:
                 self.load_img_catalog(imgs)
+        elif hasattr(imgs, '__iter__'):
+            self.load_img_list(imgs)
+        else:
+            raise TypeError('unexpected type for imgs: %s'
+                                % type(imgs).__name__)
 
         # GUI args
         if iter_rand is not None:
@@ -194,7 +199,8 @@ class imgMarker:
                     if None, use `basename` of the path
                         with also suffix striped
         '''
-        assert os.path.isfile(fname)
+        assert os.path.isfile(fname), \
+                'image not exists: [%s]' % fname
 
         if name is None:
             name=os.path.basename(fname)
