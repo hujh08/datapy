@@ -73,12 +73,24 @@ do
     echo -e "\tcp -r $subd/* \$(moddir)/$subd" >> $makef
 done
 
+echo
+
 # other tasks
+echo "task: clean"
 echo >>$makef
 echo "clean:">>$makef
 echo -e "\trm -rf \$(moddir)/*">>$makef
 
+echo "task: rmdir"
 echo >>$makef
 echo "rmdir:">>$makef
 echo -e "\trm -rf \$(moddir)/*">>$makef
 echo -e "\trmdir \$(moddir)">>$makef
+
+for subd in "${subds[@]}"
+do
+    echo "task: rm$subd"
+    echo >>$makef
+    echo "rm$subd:">>$makef
+    echo -e "\trm -rf \$(moddir)/$subd">>$makef
+done
