@@ -9,6 +9,7 @@
 '''
 
 import numbers
+import copy
 
 import numpy as np
 
@@ -17,7 +18,7 @@ class LinearManager:
         manager of variants
         Linear constraints are traced and maintained dynamically.
     '''
-    def __init__(self, size=1e4, precise=1e-10):
+    def __init__(self, size=int(1e3), precise=1e-10):
         '''
             initiation of manager
 
@@ -52,6 +53,8 @@ class LinearManager:
 
     def copy(self):
         manager=self.__class__(self._size, self._precise)
+
+        manager._copy_vars_from(self)
 
         return manager
 
@@ -109,6 +112,20 @@ class LinearManager:
 
         # constant vars: {d: c}
         self._const_vars={}
+
+    def _copy_vars_from(self, m):
+        '''
+            copy vars constraints from another manager
+        '''
+        self._basis_vars[:]=copy.deepcopy(m._basis_vars)
+
+        self._lcomb_vars.clear()
+        for k in m._lcomb_vars:
+            self._lcomb_vars[k]=copy.deepcopy(m._lcomb_vars[k])
+
+        self._const_vars.clear()
+        for k in m._const_vars:
+            self._const_vars[k]=copy.deepcopy(m._const_vars[k])
 
     # vars size
     def _get_len_vars(self):
@@ -579,14 +596,17 @@ class LinearManager:
                 left = right
                 where both `left` and `right` are LnComb-like object
         '''
-        assert isinstance(left, LnComb)
+        left=LnComb.lncomb_from(left)
+        right=LnComb.lncomb_from(right)
 
         p=left-right
 
         vs, ks, c=p.get_vs_coeffs_const()
         self._add_vars_lcons(vs, ks, -c)
 
-    def repr_lncomb_with_basis(self, lncomb, return_lncomb=False):
+    def repr_lncomb_with_basis(self, lncomb, return_lncomb=False,
+                                    remove_zeroterm=False,
+                                    raise_exception=True):
         '''
             rerepsent a linear combination of variants
                 in a basis
@@ -600,9 +620,35 @@ class LinearManager:
                 return_lncomb: bool
                     if True, return LnComb instance
                     otherwise, return tuple `(coeffs, const)`
+
+                remove_zeroterm: bool, default: False
+                    whether to remove term with coefficient ~ zero
+
+                raise_exception: bool, default: False
+                    if True, raise Exception when unknown vars contained
+                    otherwise return None
         '''
-        vs, ks, c=LnComb.lncomb_from(lncomb).get_vs_coeffs_const()
-        assert all([self._contains(v) for v in vs])
+        lncomb=LnComb.lncomb_from(lncomb)
+        if remove_zeroterm:
+            lncomb=lncomb.merge_like_terms()
+        vs, ks, c=lncomb.get_vs_coeffs_const()
+
+        # remove zero term
+        if remove_zeroterm:
+            vs0, ks0=vs, ks
+            vs, ks=[], []
+            for vi, ki in zip(vs0, ks0):
+                if self._is_zero(ki):
+                    continue
+                vs.append(vi)
+                ks.append(ki)
+
+        # check whether exists unknown variables
+        if not all([self._contains(v) for v in vs]):
+            if raise_exception:
+                raise Exception('unknown vars met in LnComb')
+            else:
+                return None
 
         coeffs=_get_coeffs_container(self._get_len_basis())
         coeffs[:]=0
@@ -635,22 +681,44 @@ class LinearManager:
         '''
             evaluate a linear combination
 
-            if not a constant result, return None 
+            if not a constant result, return None
         '''
-        ks, c=self.repr_lncomb_with_basis(lncomb, return_lncomb=False)
+        ksc=self.repr_lncomb_with_basis(lncomb, return_lncomb=False,
+                                                remove_zeroterm=True,
+                                                raise_exception=False)
+        if ksc is None:
+            return None
+
+        ks, c=ksc
         if not self._all_zero(ks):
             return None
         return c
 
-    def get_ratio_between_lncombs(self, t0, t1):
+    def eval_ratio_of_lncombs(self, t0, t1):
         '''
             return ratio of linear combinations, t0/t1
 
             if not constant ratio, return None
         '''
-        ks0, c0=self.repr_lncomb_with_basis(t0, return_lncomb=False)
-        ks1, c1=self.repr_lncomb_with_basis(t1, return_lncomb=False)
+        kwargs=dict(return_lncomb=False, remove_zeroterm=True, raise_exception=False)
+        ksc0=self.repr_lncomb_with_basis(t0, **kwargs)
+        ksc1=self.repr_lncomb_with_basis(t1, **kwargs)
 
+        if ksc0 is None or ksc1 is None:
+            # add unknown vars in new manager
+            t0=LnComb.lncomb_from(t0)
+            t1=LnComb.lncomb_from(t1)
+
+            vs0=t0.get_vs_coeffs_const()[0]
+            vs1=t1.get_vs_coeffs_const()[0]
+
+            m=self.copy()
+            vs=[v for v in vs0+vs1 if not m._contains(v)]
+            m._add_new_basis_vars(vs)
+            return m.eval_ratio_of_lncombs(t0, t1)
+
+        ks0, c0=ksc0
+        ks1, c1=ksc1
         indsnz0=self._inds_nonzero(ks0)
         indsnz1=self._inds_nonzero(ks1)
         indsnz=[*indsnz0, *indsnz1]
