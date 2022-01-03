@@ -39,8 +39,10 @@ import re
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 
 from .varlinear import LinearManager, LnComb
+from .tools import map_to_nested
 from .tools_class import add_proxy_method
 
 class RectManager:
@@ -98,6 +100,9 @@ class RectManager:
         for k in 'xy':
             p=self._root_grid._get_ith_point(k, 0)
             p._set_to(0)
+
+        # figure instance
+        self._fig=None
 
     # accept register from grid
     def _accept_grid(self, grid):
@@ -270,6 +275,13 @@ class RectManager:
 
         return w, h
 
+    def eval_wh_ratio(self):
+        '''
+            evaluate w/h
+        '''
+        root=self._root_rect
+        return self.eval_ratio(root.width, root.height)
+
     def create_figure(self, figsize=None, **kwargs):
         '''
             create figure at root rect via `plt.figure`
@@ -280,39 +292,53 @@ class RectManager:
             Parameters:
                 figsize: (w, h) in inches or None
                     figure size to create
+                    acts only when fig not created and
+                                w, h not determined from constraints
 
-                    if None, evaluate from variables
+                    if ratio w/h could be determined,
+                        use as large size as possible to keep the ratio
+
+                    if None, use `plt.rcParams['figure.figsize']`
+
 
                 kwargs: optional kwargs for `plt.figure`
         '''
-        if hasattr(self, '_fig'):  # already created
-            assert figsize is None and not kwargs, \
-                'fig already created'
-
+        if self._fig is not None:  # already created
             return self._fig
 
         root=self._root_rect
+        w, h=self.eval_figsize()
 
-        if figsize is not None:
+        if w is None or h is None:
+            if figsize is None:
+                figsize=plt.rcParams['figure.figsize']
+
             w, h=figsize
             assert isinstance(w, numbers.Real) and \
                    isinstance(h, numbers.Real), \
                     'only allow float for `figsize`'
 
-            root.set_width(w)
-            root.set_height(h)
-        else:
-            w, h=self.eval_figsize()
+            # ratio w/h eval
+            k=self.eval_wh_ratio()
+            if k is None:
+                root.set_width(w)
+                root.set_height(h)
+            elif w>k*h:
+                root.set_height(h)
+            else:
+                root.set_width(w)
 
-            assert w is not None and h is not None, \
-                'figsize not determined from vars eval'
+            # eval from figsize
+            w, h=self.eval_figsize()
 
         fig=plt.figure(figsize=(w, h), **kwargs)
         self._fig=fig
 
         return fig
 
-    def create_axes_in_rects(self, rects, return_fig=True):
+    def create_axes_in_rects(self, rects,
+                    sharex=None, sharey=None,
+                    return_fig=True, **kwargs):
         '''
             create axes in collection of rects
 
@@ -324,34 +350,59 @@ class RectManager:
                 rects: Rect, or Iterable
                     collection of rect to create axes
 
+                sharex, sharey: list of collections
+                    each entry corresponds to a set of rect
+                        to share axis with each other
+
                 return_fig: bool
                     if True, return fig, axes
                     otherwise, return axes
+
+                optional kwargs: used in `Rect.create_axes`
         '''
         fig=self.create_figure()
 
-        axes=self._create_axes_recur(fig, rects)
+        axes=self._create_axes_recur(rects, **kwargs)
+
+        # share x/y-axis
+        self._set_grps_share_axis('x', sharex)
+        self._set_grps_share_axis('y', sharey)
 
         if return_fig:
             return fig, axes
         return axes
 
     ## auxiliary functions
-    def _create_axes_recur(self, fig, rects):
+    def _set_grps_share_axis(self, axis, grps):
+        '''
+            set axis share for list of groups
+        '''
+        if grps is None:
+            return
+
+        for grp in grps:
+            self._set_axes_share_axis(axis, grp)
+
+    def _set_axes_share_axis(self, axis, rects):
+        '''
+            set axis share between group of rects
+
+            in matplotlib, sharex/sharey is implemented by
+                `matplotlib.cbook.Grouper`
+        '''
+        if len(rects)<2:
+            return
+
+        rect0=rects[0]
+        for ri in rects[1:]:
+            ri.set_axis_share(axis, rect0)
+
+    def _create_axes_recur(self, rects, **kwargs):
         '''
             recusively create axes in rects
         '''
-        if isinstance(rects, Rect):
-            rect=rects
-            return rect.create_axes(fig=fig)
-
-        axes=[]
-        for rsi in rects:
-            axes.append(self._create_axes_recur(fig, rsi))
-
-        if isinstance(rects, np.ndarray):
-            return np.array(axes)
-        return type(rects)(axes)
+        return map_to_nested(lambda a: a.create_axes(**kwargs), rects,
+                      is_scalar=lambda a: isinstance(a, Rect))
 
     # to string
     def vars_info(self):
@@ -550,7 +601,23 @@ class RectGrid:
 
         self._register_at_parent_manager()
 
-    # rect and subgrid
+    # subgrid
+    def add_subgrid(self, nx, ny, indx=0, indy=0):
+        '''
+            add subgrid `(ny, nx)` at loc `(indy, indx)`
+
+            Parameters:
+                nx, ny: int
+                    num of rows and coumns for subgrid
+
+                indx, indy: int, slice, or other item object
+                    specify rect to place grid in
+                    see `get_rect` for detail
+        '''
+        return self._get_rect(indx=indx, indy=indy)\
+                   ._add_grid(nx=nx, ny=ny)
+
+    # rect
     def _get_rect(self, indx=0, indy=0, xspan=None, yspan=None):
         '''
             return rect with index (indx, indy)
@@ -583,6 +650,16 @@ class RectGrid:
         return Rect(self, indx=indx, indy=indy,
                           xspan=xspan, yspan=yspan)
 
+    def _get_ith_rect(self, i):
+        '''
+            return ith rect
+
+            rects is ordered in row-first way
+        '''
+        indx, indy=self._standard_rect_xyind_of_ith(i)
+
+        return self._get_rect(indx=indx, indy=indy)
+
     ## index of base rect
     def _get_num_rect_along_axis(self, axis):
         '''
@@ -606,28 +683,20 @@ class RectGrid:
                 'only allow integral for rect y-index'
         return self._yindex[indy]
 
-    def _standard_rect_index(self, indx, indy):
+    def _standard_rect_xyind(self, indx, indy):
         '''
             standardize index of (base) rect
         '''
         return self._standard_rect_xind(indx),\
                self._standard_rect_yind(indy)
 
-    ## user methods: getter
-    def get_parent(self):
+    def _standard_rect_xyind_of_ith(self, i):
         '''
-            return parent rect
-        '''
-        return self._parent
-
-    def get_rect(self, i):
-        '''
-            return ith rect
-
-            order of rect is counting along rows
+            return standard index for ith rect
+                (indx, indy)
         '''
         assert isinstance(i, numbers.Integral), \
-            'only support int to get ith rect'
+            'only support int for order'
 
         nx, ny=self._nx, self._ny
         n=nx*ny
@@ -637,21 +706,133 @@ class RectGrid:
 
         indy=i//nx
         indx=i-indy*nx
+        return indx, indy
 
-        return self._get_rect(indx=indx, indy=indy)
+    def _standard_rect_xyind_arg(self, *args, return_order=False, **kwargs):
+        '''
+            stardardize arg of index
+
+            if `return_order`, return int order of rect
+        '''
+        if len(args)==1 and not kwargs:
+            ix, iy=self._standard_rect_xyind_of_ith(args[0])
+        else:
+            ix, iy=self._standard_rect_xyind(*args, **kwargs)
+
+        if return_order:
+            return ix+iy*self._nx
+        return ix, iy
+
+    ## user methods: getter
+    def get_parent(self):
+        '''
+            return parent rect
+        '''
+        return self._parent
+    parent=property(get_parent)
+
+    def get_rect(self, i):
+        '''
+            just return ith rect
+            always create new rect
+
+            rects is ordered in row-first way
+        '''
+        return self._get_ith_rect(i)
+
+    def get_rects(self, arg='row', overlap=False):
+        '''
+            return collection of rects
+
+            Parameters:
+                arg: str, or nested list of int or tuple
+                    if str, only 'row', 'col', 'all'
+                        return all rects organized as
+                            'row': 2d array, row-first
+                            'col': 2d array, columns-first
+                            'all': 1d array, row-first
+
+                    if nested list, scalar is index passed to `__getitem__`
+                        e.g. int for ith rect
+                    return collection with same organization
+
+                overlap: bool
+                    whether allow overlap rect in exactly same region
+
+                    if True, always create new rect even in same region
+        '''
+        if isinstance(arg, str):
+            return self._get_rects_by_str(arg)
+        return self._get_rects_by_inds(arg, overlap=overlap)
+
+    ### auxiliary functions
+    def _get_rects_by_str(self, s):
+        '''
+            real work to get rects for
+                'row', 'col', 'all'
+        '''
+        valids=['row', 'col', 'all']
+        assert s in valids, \
+            'only allow str arg for `get_rects` ' \
+            'in %s' % str(valids)
+
+        ny, nx=self._ny, self._nx
+        inds=np.arange(nx*ny).reshape(ny, nx)
+
+        if s=='all':
+            inds=np.ravel(inds)
+        elif s=='col':
+            inds=np.transpose(inds)
+
+        return self._get_rects_by_inds(inds)
+
+    def _get_rects_by_inds(self, inds, overlap=False):
+        '''
+            fetch rects in given indices
+
+            :param overlap: bool
+                whether allow overlap rect in exactly same region
+        '''
+        if overlap:
+            getitem=self.__getitem__
+        else:
+            buf={}
+            def getitem(ind):
+                a=self.__getitem__(ind)
+                k=a.get_xyind_sw(), a.get_xyspan()
+                if k not in buf:
+                    buf[k]=a
+                return buf[k]
+        return map_to_nested(getitem, inds,
+                    is_scalar=self._is_type_item_index,
+                    astype=None)
+
+    ## support syntax: e.g. grid[0, 1], grid[:2, :]
+    def _is_type_item_index(self, arg):
+        '''
+            whether `arg` is valid type for `__getitem__`
+        '''
+        return isinstance(arg, tuple) or \
+               isinstance(arg, slice) or \
+               isinstance(arg, numbers.Number)
 
     def __getitem__(self, prop):
         '''
             return rect via self[prop]
+            always create new rect
             
-            regard grid as 2d array
-                in some cases, different with GridSpec
-                    like g[1]
-                        here: g[1, :]
-                        GridSpec: return second rect
-                            arange rects as flat of ndarray
+            same syntax as GridSpec
+            Note:
+                g[0] for first rect
+                    not g[0, :] in ndarray
         '''
-        if type(prop) is tuple:
+        assert self._is_type_item_index(prop), \
+            'unexpected type for index: %s' \
+                % (type(prop).__name__)
+
+        if isinstance(prop, numbers.Number):
+            return self._get_ith_rect(prop)
+        elif isinstance(prop, tuple):
             if len(prop)==1:
                 prop=(prop[0], slice(None))
             elif len(prop)!=2:
@@ -663,21 +844,6 @@ class RectGrid:
 
         indy, indx=prop
         return self._get_rect(indx=indx, indy=indy)
-
-    def add_subgrid(self, nx, ny, indx=0, indy=0):
-        '''
-            add subgrid `(ny, nx)` at loc `(indy, indx)`
-
-            Parameters:
-                nx, ny: int
-                    num of rows and coumns for subgrid
-
-                indx, indy: int, slice, or other item object
-                    specify rect to place grid in
-                    see `get_rect` for detail
-        '''
-        return self._get_rect(indx=indx, indy=indy)\
-                   ._add_grid(nx=nx, ny=ny)
 
     # Points
     def _standard_point_index(self, axis, i):
@@ -1040,6 +1206,96 @@ class RectGrid:
             return
         super().__setattr__(prop, val)
 
+    # create axes
+    def create_axes(self, inds=None,
+                          sharex=False, sharey=False,
+                          omits=None, return_fig=True, **kwargs):
+        '''
+            create axes in grid
+
+            Parameters:
+                inds: None, or arg to `get_rects`
+                    if None, use `row`
+
+                sharex, sharey: same type as `matplotlib.pyplot.subplots` or
+                                list of collection of indices
+                    axes to share x/y-axis
+
+                omits: list of index
+                    order of rects to omit, no axes to create
+
+                return_fig: bool
+                    whether return fig, axes or just axes
+        '''
+        if inds is None:
+            inds='row'
+        rects=self.get_rects(inds, overlap=False)
+
+        # omits
+        if omits is None:
+            orders_omit=set()
+        else:
+            orders_omit=set([a.order for a in self.get_rects(omits)])
+
+        # skip omits and construct map {order: rect}
+        map_rects={}
+        def get_notomit_to_map(a):
+            i=a.order
+            if i in orders_omit:
+                return None
+            map_rects[i]=a
+            return a
+
+        rects=map_to_nested(get_notomit_to_map, rects,
+            is_scalar=lambda a: isinstance(a, Rect),
+            skip_none=True)
+
+        # sharex, sharey
+        sharex=self._rects_for_axis_share(sharex, map_rects)
+        sharey=self._rects_for_axis_share(sharey, map_rects)
+
+        # create axes
+        return self._manager.create_axes_in_rects(rects,
+                            sharex=sharex, sharey=sharey,
+                            return_fig=return_fig, **kwargs)
+
+    def _rects_for_axis_share(self, arg, map_rects):
+        '''
+            return list of rects collection for axis share
+
+            Parameters:
+                arg: arg for axis share
+                    2 types:
+                        - same as `matplotlib.pyplot.subplots`
+                        - args passed to `get_rects`
+
+                map_rects: dict {order: rects}
+        '''
+        if arg is None:
+            return None
+
+        if isinstance(arg, bool):
+            arg='all' if arg else 'none'
+
+        if arg=='none':
+            return None
+
+        rects=self.get_rects(arg)
+        if not rects:
+            return None
+
+        # for squeeze array, like arg='all'
+        if isinstance(rects[0], Rect):
+            rects=[rects]
+
+        def get_rect_from_map(a):
+            i=a.order
+            return map_rects.get(i, None)
+
+        return map_to_nested(get_rect_from_map, rects,
+            is_scalar=lambda a: isinstance(a, Rect),
+            skip_none=True)
+
     # to string
     def __repr__(self):
         '''
@@ -1077,16 +1333,65 @@ class Rect:
         self._grid=grid
 
         # index in grid, standardize
-        x0, y0=grid._standard_rect_index(indx=indx, indy=indy)
+        x0, y0=grid._standard_rect_xyind(indx=indx, indy=indy)
 
         # span
         assert xspan>=1 and yspan>=1, \
                 'only allow positive for span'
-        x1, y1=grid._standard_rect_index(indx=x0+xspan-1,
+        x1, y1=grid._standard_rect_xyind(indx=x0+xspan-1,
                                          indy=y0+yspan-1)
 
         self._indx0, self._indy0=x0, y0
         self._indx1, self._indy1=x1, y1
+
+        # attributes for axes
+        self._axes=None
+
+    # index in grid
+    def is_left(self):
+        '''
+            whether left in grid
+        '''
+        return self._indx0==0
+
+    def is_bottom(self):
+        '''
+            whether bottom in grid
+        '''
+        return self._indy0==0
+
+    def get_xyind_sw(self):
+        '''
+            xy-index of left-bottom corner
+            SW: south-west
+        '''
+        return self._indx0, self._indy0
+
+    def get_xyspan(self):
+        '''
+            xy-span
+        '''
+        return self._indx1-self._indx0+1, \
+               self._indy1-self._indy0+1
+
+    @property
+    def area(self):
+        '''
+            return (ix1-ix0+1)*(iy1-iy0)+1
+        '''
+        w, h=self.get_xyspan()
+        return w*h
+
+    @property
+    def order(self):
+        '''
+            order in grid
+            only support when area=1
+        '''
+        assert self.area==1, \
+            'only support property `order` for area==1'
+        return self._grid._standard_rect_xyind_arg(
+            indx=self._indx0, indy=self._indy0, return_order=True)
 
     # manager
     def _get_manager(self):
@@ -1429,24 +1734,95 @@ class Rect:
 
         return x0, y0, w, h
 
-    def create_axes(self, fig=None, **kwargs):
+    def create_axes(self, tick_params=None,
+                        nlnx=False, nbny=False,
+                        **kwargs):
         '''
             create axes in rect
             return created axes
 
-            Parameters:
-                fig: figure or None
-                    figure the axes located
+            basic method to create axes
 
-                    if None, create in root rect
+            Parameters:
+                tick_params: None or Dict
+                    used in `axes.tick_params`
+
+                nlnx, nbnx: bool
+                    abbreviation of
+                        nlnx: 'not left, then no xlabel'
+                        nbnx: 'not bottom, then no ylabel'
+
+                    whether not draw x/ylabels if not left/bottom
         '''
-        if fig is None:
+        if self._axes is not None:
+            assert not kwargs, 'axes already created'
+            axes=self._axes
+        else:
             fig=self._get_manager().create_figure()
 
-        loc=self.get_loc_in_root()
-        axes=fig.add_axes(loc, **kwargs)
+            loc=self.get_loc_in_root()
+            axes=fig.add_axes(loc, **kwargs)
+
+            self._axes=axes
+
+        # tick params
+        if tick_params:
+            axes.tick_params(**tick_params)
+
+        if nlnx and not self.is_left():
+            axes.tick_params(labelleft=False)
+
+        if nbny and not self.is_bottom():
+            axes.tick_params(labelbottom=False)
 
         return axes
+
+    def has_axes(self):
+        '''
+            whether has an axes
+        '''
+        return self._axes is not None
+
+    def get_axes(self):
+        '''
+            return axes
+        '''
+        assert self.has_axes(), \
+            'axes not exists'
+        return self._axes
+    axes=property(get_axes)
+
+    ## x/y-axis share
+    def set_axis_share(self, axis, other):
+        '''
+            set to share with other rect or Axes
+
+            Parameters:
+                axis: 'x' or 'y'
+                    axis to share
+
+                other: Rect, Axes
+                    other axes to share
+        '''
+        check_axis(axis)
+
+        assert self.has_axes(), 'axes not exists'
+        axes=self._axes
+
+        if isinstance(other, Rect):
+            assert other.has_axes(), 'axes not exists in `other`'
+            other=other._axes
+        elif not isinstance(other, Axes):
+            raise TypeError('only allow type `Rect` or `Axes` for `other`')
+
+        # grouper for axis share: `matplotlib.cbook.Grouper`
+        grp=getattr(axes, 'get_shared_%s_axes' % axis)()
+
+        ## already shared
+        if grp.joined(axes, other):
+            return
+
+        getattr(axes, 'share'+axis)(other)
 
     # to string
     def __repr__(self):
@@ -1814,6 +2190,14 @@ def _parse_ratios(ratios, n):
         'but got %i' % (n, n-1, len(ratios))
 
     return ratios
+
+## check function
+def check_axis(axis):
+    '''
+        check axis
+    '''
+    axs=list('xy')
+    assert axis in axs, 'only allow xy for axis'
 
 ## special list type
 class SetterList(list):
