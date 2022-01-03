@@ -45,6 +45,7 @@ from matplotlib import font_manager
 from .varlinear import LinearManager, LnComb
 from .tools import map_to_nested, Units
 from .tools_class import add_proxy_method
+from .params import params_create_axes
 
 class RectManager:
     '''
@@ -189,13 +190,15 @@ class RectManager:
 
     def get_dist_in_points(self, size):
         '''
-            return LnComb for a size in unit of points
+            return LnComb for given `size` in unit of points
+            const of LnComb is in unit of inches
 
             many elements in matplotlib accept size in points
                 like fontsize, line width, labelsize
 
             Parameters:
                 size: float
+                    in unit of points
         '''
         assert isinstance(size, numbers.Real), \
             'only support float for size'
@@ -1878,7 +1881,40 @@ class Rect:
 
         return x0, y0, w, h
 
-    def create_axes(self, tick_params=None,
+    def create_axes(self, style=None, **kwargs):
+        '''
+            create axes in rect
+            return axes
+
+            Parameters:
+                style: None, str
+                    frequently used combination of args
+
+                    pass to `params_create_axes`
+                        for real kwargs
+
+            Real kwargs:
+                tick_params: None or Dict
+                    used in `axes.tick_params`
+
+                nlnx, nbnx: bool
+                    abbreviation of
+                        nlnx: 'not left, then no xlabel'
+                        nbnx: 'not bottom, then no ylabel'
+
+                    whether not draw x/ylabels if not left/bottom
+        '''
+        if style is not None:
+            kws=params_create_axes(style)
+            for k, v in kws.items():
+                assert k not in kwargs, \
+                    'conflict arg `%s`' % k
+
+                kwargs[k]=v
+
+        return self._create_axes(**kwargs)
+
+    def _create_axes(self, tick_params=None,
                         nlnx=False, nbny=False,
                         **kwargs):
         '''
