@@ -807,6 +807,22 @@ class LnComb:
 
         return self.__class__(vs, ks, c)
 
+    # constant
+    def is_const(self):
+        t=self.merge_like_terms()
+        if len(t._vars)==0:
+            return True
+        return False
+
+    def asfloat(self):
+        '''
+            convert to float if const
+        '''
+        t=self.merge_like_terms()
+        assert len(t._vars)==0, 'not constant LnComb'
+
+        return t._const
+
     # construct from other object
     @classmethod
     def lncomb_from(cls, t):
@@ -896,6 +912,13 @@ class LnComb:
     def __truediv__(self, k):
         # self/k
         return self.__mul__(1/k)
+
+    ## to float if const
+    def __float__(self):
+        '''
+            to float if const
+        '''
+        return self.asfloat()
 
     # to string and print
     def _flt_fmt(self, k):

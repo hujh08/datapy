@@ -40,9 +40,10 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib import font_manager
 
 from .varlinear import LinearManager, LnComb
-from .tools import map_to_nested
+from .tools import map_to_nested, Units
 from .tools_class import add_proxy_method
 
 class RectManager:
@@ -148,6 +149,91 @@ class RectManager:
     right =property(lambda self: self._root_rect.get_right())
     bottom=property(lambda self: self._root_rect.get_bottom())
     top   =property(lambda self: self._root_rect.get_top())
+
+    # size unit
+    _UNITS=set(Units.keys())
+    _UNITS.update(['px', 'pixel', 'pts'])
+
+    _VAR_INV_DPI='idp'   # var for inverse of 'dpi'
+
+    def get_size_unit(self, unit):
+        '''
+            return LnComb for a unit
+
+            valid unit:
+                inches: default
+
+                cm, mm, ...: length
+
+                points: 1/72 inches
+                    always used in fontsize, labelsize, et. al.
+
+                px, pixel: pixel
+                    1/dpi 
+        '''
+        assert unit in self._UNITS, \
+            'only support units: %s' % str(self._UNITS)
+
+        # convert alias
+        if unit=='pts':
+            unit='points'
+        elif unit=='px':
+            unit='pixel'
+
+        # construct LnComb
+        if unit in Units:
+            return LnComb.lncomb_from(Units[unit])
+
+        if unit=='pixel':
+            return LnComb([self._VAR_INV_DPI], 1, 0)
+
+    def get_dist_in_points(self, size):
+        '''
+            return LnComb for a size in unit of points
+
+            many elements in matplotlib accept size in points
+                like fontsize, line width, labelsize
+
+            Parameters:
+                size: float
+        '''
+        assert isinstance(size, numbers.Real), \
+            'only support float for size'
+
+        return size*self.get_size_unit('points')
+
+    def get_fontsize(self, size=None):
+        '''
+            return font size in inches
+                with LnComb type
+
+            Parameters:
+                size: float, None, or str
+                    if str, only support
+                        'xx-small', 'x-small', 'small', 'medium', 'large', 
+                        'x-large', 'xx-large', 'larger', 'smaller'
+                    see `matplotlib.font_manager.font_scalings`
+                        for details
+        '''
+        pts=self.get_size_unit('points')  # points size in inches
+        if isinstance(size, numbers.Number):
+            return size*pts
+
+        fontsize=plt.rcParams['font.size']
+        if size is None:
+            return fontsize*pts
+
+        assert isinstance(size, str), \
+            'only support float, str or None for fontsize, ' \
+            'but got %s' % (type(size).__name__)
+
+        font_scalings=font_manager.font_scalings
+        assert size in font_scalings, \
+            'only allow fontsize in %s, ' \
+            'but got \'%s\'' % (str(list(font_scalings.keys())),
+                                size)
+        s=font_scalings[size]
+        return (s*fontsize)*pts
 
     # constraint for var manager
     def _add_lncomb(self, left, right=0):
@@ -263,6 +349,7 @@ class RectManager:
         self.set_equal(d0, d1, *args)
 
     # create figure
+    ## figure size
     def eval_figsize(self):
         '''
             evaluate figure size, (w, h)
@@ -282,7 +369,27 @@ class RectManager:
         root=self._root_rect
         return self.eval_ratio(root.width, root.height)
 
-    def create_figure(self, figsize=None, **kwargs):
+    ## dpi
+    def set_dpi(self, dpi):
+        '''
+            set dpi, dots per inches
+        '''
+        # inverse of dpi: pixel size in inches, or inches per dots
+        ipd=self.get_size_unit('pixel')
+        self._add_lncomb(ipd, 1/dpi)
+
+    def eval_dpi(self):
+        '''
+            eval dpi, dots per inch
+        '''
+        ipd=self.get_size_unit('pixel')
+        inv_dpi=self.eval(ipd)
+
+        if inv_dpi is None:
+            return None
+        return 1/inv_dpi
+
+    def create_figure(self, figsize=None, dpi=None, **kwargs):
         '''
             create figure at root rect via `plt.figure`
             return created fig
@@ -300,6 +407,11 @@ class RectManager:
 
                     if None, use `plt.rcParams['figure.figsize']`
 
+                dpi: float
+                    dots per inches
+                    only acts when not determined from constraints
+
+                    if None, use `plt.rcParams['figure.dpi']`
 
                 kwargs: optional kwargs for `plt.figure`
         '''
@@ -331,7 +443,19 @@ class RectManager:
             # eval from figsize
             w, h=self.eval_figsize()
 
-        fig=plt.figure(figsize=(w, h), **kwargs)
+        # dpi
+        px=self.eval_dpi()
+        if px is None:
+            if dpi is None:
+                dpi=plt.rcParams['figure.dpi']
+            else:
+                assert isinstance(dpi, numbers.Real), \
+                    'only allow float for `dpi`'
+
+            self.set_dpi(dpi)
+            px=self.eval_dpi()
+
+        fig=plt.figure(figsize=(w, h), dpi=px, **kwargs)
         self._fig=fig
 
         return fig
@@ -992,10 +1116,38 @@ class RectGrid:
         '''
         return [self.get_margin('y', i) for i in range(2)]
 
+    ## get collection of dists in group
+    _GROUPS_DIST=['width',   'height', 'wspace',  'hspace', 
+                 'wmargin', 'hmargin', 'margin', 'sep']
+    def get_dists_by_group(self, group='width'):
+        '''
+            get group of dists
+
+            valid group:
+                'width', 'height',
+                'wspace', 'hspace'
+                'wmargin', 'hmargin'
+                'sep': separations, wspace+hspace
+                'margin': wmargin+hmargin
+        '''
+        assert group in self._GROUPS_DIST, \
+                'only allow dist `group` in %s, ' \
+                'but got [%s]' % (str(self._GROUPS_DIST), group)
+
+        if group=='margin':
+            d0=self.get_dists_by_group('wmargin')
+            d1=self.get_dists_by_group('hmargin')
+            return [*d0, *d1]
+
+        if group=='sep':
+            d0=self.get_dists_by_group('wspace')
+            d1=self.get_dists_by_group('hspace')
+            return [*d0, *d1]
+
+        return getattr(self, 'get_all_%ss' % group)()
+
     # set linear constraints
-    _TYPES_DIST=['width',   'height', 'wspace',  'hspace', 
-                 'wmargin', 'hmargin']
-    def set_dists_ratio(self, ratios, dist_type='width'):
+    def set_dists_ratio(self, ratios, dist_group='width'):
         '''
             set ratio for collection of dists
 
@@ -1003,24 +1155,20 @@ class RectGrid:
                 ratios: float or list of float
                     ratios between dists
 
-                    len of ratios must be consistent with dist_type
+                    len of ratios must be consistent with dist_group
                         that means n, or n-1 when `n` dists to set
 
-                dist_type: 'width', 'height', 'wspace', 'hspace'
-                           'wmargin', 'hmargin'
-                    type of dists to set
+                dist_group: 'width', 'height', 'wspace', 'hspace'
+                           'wmargin', 'hmargin', 'margin', 'sep'
+                    group of dists to set
         '''
-        assert dist_type in self._TYPES_DIST, \
-                'only allow `dist_type` in %s, ' \
-                'but got [%s]' % (str(self._TYPES_DIST), dist_type)
-
-        dists=getattr(self, 'get_all_%ss' % dist_type)()
+        dists=self.get_dists_by_group(dist_group)
         if len(dists)<=1:
             return
 
         self._manager.set_dists_ratio(dists, ratios)
 
-    def set_dists_val(self, vals, dist_type='width'):
+    def set_dists_val(self, vals, dist_group='width'):
         '''
             set value(s) for collection of dists
 
@@ -1030,15 +1178,11 @@ class RectGrid:
 
                     if list, must has same len with num of dists
 
-                dist_type: 'width', 'height', 'wspace', 'hspace'
-                           'wmargin', 'hmargin'
-                    type of dists to set
+                dist_group: 'width', 'height', 'wspace', 'hspace'
+                           'wmargin', 'hmargin', 'margin', 'sep'
+                    group of dists to set
         '''
-        assert dist_type in self._TYPES_DIST, \
-                'only allow `dist_type` in %s, ' \
-                'but got [%s]' % (str(self._TYPES_DIST), dist_type)
-
-        dists=getattr(self, 'get_all_%ss' % dist_type)()
+        dists=self.get_dists_by_group(dist_group)
         if not isinstance(vals, abc.Iterable):
             vals=[vals]*len(dists)
         else:
@@ -1050,16 +1194,16 @@ class RectGrid:
         for di, vi in zip(dists, vals):
             di.set_to(vi)
 
-    def set_dists_equal(self, dist_type='xy'):
+    def set_dists_equal(self, dist_group='xy'):
         '''
             set collection of dists equal
 
             Parameters:
-                dist_type: 'width', 'height', 'wspace', 'hspace'
-                           'wmargin', 'hmargin',
+                dist_group: 'width', 'height', 'wspace', 'hspace'
+                           'wmargin', 'hmargin', 'margin', 'sep'
                            or 'x', 'y', 'xy'
 
-                    type of dist to set equal
+                    group of dist to set equal
 
                     if 'x', 'y', 'xy',
                         set
@@ -1068,13 +1212,13 @@ class RectGrid:
                         equal
 
         '''
-        if dist_type=='xy':
+        if dist_group=='xy':
             self.set_dists_equal('x')
             self.set_dists_equal('y')
             return
 
-        if dist_type in ['x', 'y']:
-            s=dict(x='width', y='height')[dist_type]
+        if dist_group in ['x', 'y']:
+            s=dict(x='width', y='height')[dist_group]
 
             self.set_dists_equal(s)
             self.set_dists_equal('%sspace' % s[0])
@@ -1082,7 +1226,7 @@ class RectGrid:
 
             return
 
-        self.set_dists_ratio(1, dist_type)
+        self.set_dists_ratio(1, dist_group)
 
     def set_rect_sep_margin_ratio(self, ratios, axis='both'):
         '''
@@ -1153,7 +1297,7 @@ class RectGrid:
         self.set_dists_val(0, s)
 
     ## properties
-    for k_ in _TYPES_DIST:
+    for k_ in _GROUPS_DIST:
         doc_='''
                 {0}s of grid
 
@@ -1165,7 +1309,7 @@ class RectGrid:
             '''.format(k_)
 
         locals()[k_+'s']=property(
-            eval('lambda self: SetterList(self.get_all_%ss())' % k_),
+            eval('lambda self: SetterList(self.get_dists_by_group(%s))' % k_),
             doc=doc_)
     del k_, doc_
 
@@ -1209,7 +1353,7 @@ class RectGrid:
     # create axes
     def create_axes(self, inds=None,
                           sharex=False, sharey=False,
-                          omits=None, return_fig=True, **kwargs):
+                          omits=None, return_fig=False, **kwargs):
         '''
             create axes in grid
 

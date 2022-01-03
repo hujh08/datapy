@@ -7,8 +7,8 @@
 from collections import abc
 import numpy as np
 
-## nested collection
-### map function to nested collection
+# nested collection
+## map function to nested collection
 def is_scalar_default(v):
     '''
         return True if not `collections.abc.Collection`
@@ -69,7 +69,7 @@ def map_to_nested(f, elements,
 
     return astype(type(elements), result)
 
-### squeeze to 1d array
+## squeeze to 1d array
 def squeeze_nested(elements, is_scalar=is_scalar_default):
     '''
         squeeze nested collection to list
@@ -86,3 +86,11 @@ def squeeze_nested(elements, is_scalar=is_scalar_default):
         result.extend(squeeze_nested(v, is_scalar))
 
     return result
+
+# Unit
+Units=dict(
+    inches=1,
+    points=1/72,  # In typography, a point is 1/72 inches
+    cm=1/2.54,
+    )
+Units['mm']=0.1*Units['cm']
