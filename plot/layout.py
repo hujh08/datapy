@@ -1317,7 +1317,8 @@ class RectGrid:
             '''.format(k_)
 
         locals()[k_+'s']=property(
-            eval('lambda self: SetterList(self.get_dists_by_group(%s))' % k_),
+            eval('lambda self: SetterList(self.get_dists_by_group(%s))'
+                    % repr(k_)),
             doc=doc_)
     del k_, doc_
 
