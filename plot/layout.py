@@ -151,6 +151,8 @@ class RectManager:
     bottom=property(lambda self: self._root_rect.get_bottom())
     top   =property(lambda self: self._root_rect.get_top())
 
+    rect=property(lambda self: self._root_rect)
+
     # size unit
     _UNITS=set(Units.keys())
     _UNITS.update(['px', 'pixel', 'pts'])
@@ -530,6 +532,9 @@ class RectManager:
         '''
         return map_to_nested(lambda a: a.create_axes(**kwargs), rects,
                       is_scalar=lambda a: isinstance(a, Rect))
+
+    ## properties
+    fig=property(lambda self: self._fig)
 
     # to string
     def vars_info(self):
