@@ -30,7 +30,10 @@ def has_na(d):
     return np.any(pd.isna(d))
 
 # to 2d table
-def df_to_2dtab(df, xcol, ycol, vcol, fillna=None):
+def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
+                    xkey=None, ykey=None,
+                    keep_dtype=True,
+                    drop_xname=True, reset_yind=True):
     '''
         convert df, like
             xcol  ycol vcol
@@ -46,19 +49,34 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None):
         useful for df with product-type of index
     '''
     df=df.reset_index()[[xcol, ycol, vcol]]
-    dt0=df[vcol].dtype
+    if keep_dtype:
+        dt0=df[vcol].dtype
 
-    dfs_xs=[]
-    xs=[]
+    xs, dfs=[], []
     for xi, dfi in df.groupby(xcol):
         xs.append(xi)
-        dfs_xs.append(dfi.set_index(ycol)[vcol])
+        dfs.append(dfi.set_index(ycol)[vcol])
 
-    # dftab=pd.concat(dfs_xs, keys=xs, names=[xcol], axis=1)
-    dftab=pd.concat(dfs_xs, keys=xs, axis=1)
+    kwargs=dict(keys=xs, axis=1)
+    if not drop_xname:  # keep xname
+        kwargs['names']=[xcol]
+    dftab=pd.concat(dfs, **kwargs)
+
+    # na
     if fillna is not None:
         dftab=dftab.fillna(fillna)
 
-    dftab=dftab.astype(dt0).reset_index()
+    # sort index
+    if xkey is not None:
+        dftab=dftab.sort_index(key=np.vectorize(xkey), axis=1)
+    if ykey is not None:
+        dftab=dftab.sort_index(key=np.vectorize(ykey), axis=0)
+
+    # dtype
+    if keep_dtype:
+        dftab=dftab.astype(dt0)
+
+    if reset_yind:
+        dftab=dftab.reset_index()
 
     return dftab
