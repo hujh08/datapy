@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 '''
-    module to handle variants and linear constraints among them
+    module to handle variables and linear constraints among them
 
-    Some variants are selected as basis, like (v1, v2, .., vn)
+    Some variables are selected as basis, like (v1, v2, .., vn)
     Others are linear combination of them (with a bias):
         v = k1*v1 + ... + kn*vn + c
 '''
@@ -15,7 +15,7 @@ import numpy as np
 
 class LinearManager:
     '''
-        manager of variants
+        manager of variables
         Linear constraints are traced and maintained dynamically.
     '''
     def __init__(self, size=int(1e3), precise=1e-10):
@@ -24,8 +24,8 @@ class LinearManager:
 
             Parameters:
                 size: int, None
-                    limit on max num of variants in control
-                    Too many variants would exhaust memory and tug calculation
+                    limit on max num of variables in control
+                    Too many variables would exhaust memory and tug calculation
 
                     If None, no limit
                         be careful to set it
@@ -92,10 +92,10 @@ class LinearManager:
             return inds[0]
         return inds
 
-    # init of variants container
+    # init of variables container
     def _init_vars_container(self):
         '''
-            init container of variants
+            init container of variables
 
             3 types:
                 - basis vars:
@@ -145,7 +145,7 @@ class LinearManager:
             return
 
         assert self._get_len_vars()+n<=self._size, \
-                'too many variants, at most %i' % self._size
+                'too many variables, at most %i' % self._size
 
     # base methods: variant type test
     def _get_var_type(self, v):
@@ -176,7 +176,7 @@ class LinearManager:
     def _is_const_var(self, v):
         return self._get_var_type(v)=='const'
 
-    # base methods: for basis variants
+    # base methods: for basis variables
     def _get_len_basis(self):
         '''
             return number of basis vars
@@ -255,7 +255,7 @@ class LinearManager:
         '''
         return self._basis_vars.pop(index)
 
-    # base methods for lcomb variants
+    # base methods for lcomb variables
     def _init_lcomb_var_container(self, v):
         '''
             init container for coeffs and const
@@ -343,7 +343,7 @@ class LinearManager:
         self._lcomb_vars.pop(v)
         return kc
 
-    # base methods for const variants
+    # base methods for const variables
     def _base_set_const_var(self, v, const):
         '''
             set const var: v = c
@@ -474,19 +474,19 @@ class LinearManager:
         '''
         self._var_basis_to_lcomb(v, 0, const, is_ind_v=is_ind_v)
 
-    # add linear constrant among variants
+    # add linear constrant among variables
     def _add_vars_lcons(self, vs, coeffs=1, const=0):
         '''
-            add linear constraint of variants
+            add linear constraint of variables
                 k1*v1+k2*v2+...+kn*vn = c
             where
-                v1, v2, .., vn: variants constrained
+                v1, v2, .., vn: variables constrained
                 k1, k2, .., kn: coefficients
                 c: constant
 
             Parameters:
                 vs: list of str
-                    variants in constraint
+                    variables in constraint
 
                 coeffs: list of number or scalar
                     use function `_fill_coeffs_to_len`
@@ -608,7 +608,7 @@ class LinearManager:
                                     remove_zeroterm=False,
                                     raise_exception=True):
         '''
-            rerepsent a linear combination of variants
+            rerepsent a linear combination of variables
                 in a basis
 
             return coeffs and const or LnComb instance
