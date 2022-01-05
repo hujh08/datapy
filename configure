@@ -64,7 +64,7 @@ install:
 EOF
 
 # subfolders
-subds=(io plot)
+subds=(plot)
 for subd in "${subds[@]}"
 do
     echo "cp dir: $subd ==> $libdir/$package/$subd"
