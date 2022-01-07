@@ -872,7 +872,7 @@ class RectGrid:
         '''
         return self._get_ith_rect(i)
 
-    def get_rects(self, arg='row', overlap=False):
+    def get_rects(self, arg='row', reverse=False, overlap=False):
         '''
             return collection of rects
 
@@ -888,17 +888,22 @@ class RectGrid:
                         e.g. int for ith rect
                     return collection with same organization
 
+                reverse: bool
+                    whether reverse order of rects
+
+                    only acts when arg is str
+
                 overlap: bool
                     whether allow overlap rect in exactly same region
 
                     if True, always create new rect even in same region
         '''
         if isinstance(arg, str):
-            return self._get_rects_by_str(arg)
+            return self._get_rects_by_str(arg, reverse=reverse)
         return self._get_rects_by_inds(arg, overlap=overlap)
 
     ### auxiliary functions
-    def _get_rects_by_str(self, s):
+    def _get_rects_by_str(self, s, reverse=False):
         '''
             real work to get rects for
                 'row', 'col', 'all'
@@ -915,6 +920,9 @@ class RectGrid:
             inds=np.ravel(inds)
         elif s=='col':
             inds=np.transpose(inds)
+
+        if reverse:
+            inds=np.flip(inds, axis=-1)
 
         return self._get_rects_by_inds(inds)
 
@@ -1040,20 +1048,32 @@ class RectGrid:
         return self._get_ith_point('y', 2*i+1)
 
     # 1d distance
-    def get_width(self, i):
+    def get_width(self, i=None):
         '''
             width of ith column
+
+            if i is None, return total width
         '''
-        p0=self.get_left(i)
-        p1=self.get_right(i)
+        if i is None:
+            p0=self.get_left(0)
+            p1=self.get_right(-1)
+        else:
+            p0=self.get_left(i)
+            p1=self.get_right(i)
         return LineSeg1D(p0, p1)
 
-    def get_height(self, i):
+    def get_height(self, i=None):
         '''
             height of ith row
+
+            if i is None, return total height
         '''
-        p0=self.get_bottom(i)
-        p1=self.get_top(i)
+        if i is None:
+            p0=self.get_bottom(0)
+            p1=self.get_top(-1)
+        else:
+            p0=self.get_bottom(i)
+            p1=self.get_top(i)
         return LineSeg1D(p0, p1)
 
     def get_wspace(self, i):
@@ -1202,14 +1222,14 @@ class RectGrid:
         for di, vi in zip(dists, vals):
             di.set_to(vi)
 
-    def set_dists_equal(self, dist_group='xy'):
+    def set_dists_equal(self, dist_group='bbox'):
         '''
             set collection of dists equal
 
             Parameters:
                 dist_group: 'width', 'height', 'wspace', 'hspace'
                            'wmargin', 'hmargin', 'margin', 'sep'
-                           or 'x', 'y', 'xy'
+                           or 'x', 'y', 'xy', 'bbox'
 
                     group of dist to set equal
 
@@ -1217,6 +1237,12 @@ class RectGrid:
                         set
                             all dists along one or both axis
                                 with same type
+                        equal
+
+                    if 'bbox',
+                        set
+                            all dists inside bbox
+                                that are width, height, wspace, hspace
                         equal
 
         '''
@@ -1231,6 +1257,15 @@ class RectGrid:
             self.set_dists_equal(s)
             self.set_dists_equal('%sspace' % s[0])
             self.set_dists_equal('%smargin' % s[0])
+
+            return
+
+        if dist_group=='bbox':
+            self.set_dists_equal('width')
+            self.set_dists_equal('wspace')
+
+            self.set_dists_equal('height')
+            self.set_dists_equal('hspace')
 
             return
 
@@ -1304,6 +1339,132 @@ class RectGrid:
 
         self.set_dists_val(0, s)
 
+    def set_margins_zero(self, axis='both'):
+        '''
+            set margins to parent rect zero
+
+            Parameters:
+                axis: 'x', 'y', or 'both'
+                    margins along which axis to set
+        '''
+        if axis=='both':
+            self.set_margins_zero('x')
+            self.set_margins_zero('y')
+            return
+
+        assert axis in list('xy'), \
+                "only support 'x', 'y' for axis"
+        s=dict(x='wmargin', y='hmargin')[axis]
+
+        self.set_dists_val(0, s)
+
+    def set_width(self, w):
+        '''
+            set total width
+        '''
+        self.width.set_to(v)
+
+    def set_height(self, h):
+        '''
+            set total height
+        '''
+        self.height.set_to(h)
+
+    def set_loc_at(self, loc, axis='xy', at='parent', locing='wh'):
+        '''
+            set loc at parent/root rect
+
+            Parameters:
+                loc: 4 or 2-tuple of floats
+                    fraction at a rect
+                    
+                    (x0, y0, w, h) or (x0, y0, x1, y1)
+                        x0, y0: coordinates for left-bottom corner
+                        x1, y1: coordinates for right-top corner
+                        w, h: total width and height of grid
+
+                    or just (x0, w) or (x0, x1) for x-axis
+                    similar for y-axis
+
+                axis: 'x', 'y', 'xy'
+                    which axis to set
+
+                    if 'xy', set both
+
+                at: 'parent', 'root', 'fig', default: 'parent'
+                    specify which rect is for the `loc`
+
+                locing: 'wh' or 'xy', default: 'wh'
+                    whether `loc` is (x0, y0, w, h) or (x0, y0, x1, y1)
+        '''
+        # type check
+        vs_at=['parent', 'root', 'fig']
+        assert at in vs_at, 'ony allow `at` in %s' % str(vs_at)
+
+        vs_lc=['wh', 'xy']
+        assert locing in vs_lc, 'ony allow `locing` in %s' % str(vs_lc)
+
+        assert len(loc) in [2, 4] and \
+               all([isinstance(t, numbers.Real) for t in loc]), \
+                'only allow tuple of 2 or 4 floats as `loc`'
+
+        # locing
+        if locing=='wh':
+            loc=np.array(loc).reshape(2, -1)
+            loc[1]+=loc[0]  # x0+w, y0+h
+            loc=list(np.ravel(loc))
+
+        # relative rect
+        manager=self.get_manager()
+
+        if at=='parent':
+            prect=self.get_parent()
+        else:
+            prect=manager.rect
+
+        ## axis
+        vs_axis=['x', 'y', 'xy']
+        assert axis in vs_axis, 'ony allow `axis` in %s' % str(vs_axis)
+
+        self._set_loc_at_by_axis(loc, axis, prect)
+
+    ### auxiliary functions
+    def _set_loc_at_by_axis(self, loc, axis, rect0):
+        '''
+            set loc at `rect0` along axis
+            
+            Parameters:
+                loc: (x0, x1)
+                axis: 'x', 'y', or 'xy'
+                rect0: relative upper level rect
+        '''
+        if axis=='xy':
+            if len(loc)==2:
+                locx=locy=loc
+            else:
+                locx=(loc[0], loc[2])
+                locy=(loc[1], loc[3])
+
+            self._set_loc_at_by_axis(locx, 'x', rect0)
+            self._set_loc_at_by_axis(locy, 'y', rect0)
+
+            return
+
+        assert len(loc)==2, \
+            'only allow 2 floats for `loc` in axis %s' % axis
+        v0, v1=loc
+
+        pp0=rect0.get_point(axis, 0)
+        pp1=rect0.get_point(axis, -1)
+        pw=pp1-pp0
+
+        p0=self.get_point(axis, 0)
+        p1=self.get_point(axis, -1)
+
+        manager=self.get_manager()
+        manager._add_lncomb(p0-pp0, v0*pw)
+        manager._add_lncomb(p1-pp0, v1*pw)
+
     ## properties
     for k_ in _GROUPS_DIST:
         doc_='''
@@ -1321,6 +1482,9 @@ class RectGrid:
                     % repr(k_)),
             doc=doc_)
     del k_, doc_
+
+    width =property(lambda self: self.get_width(), doc='total width')
+    height=property(lambda self: self.get_height(), doc='total height')
 
     ## getattr, setattr: for some abbreviations
     def _is_abbr_attr(self, attr):
@@ -1712,6 +1876,14 @@ class Rect:
         s_=locals()['set_'+k_]
         locals()[k_]=property(g_, s_)
     del k_, g_, s_
+
+    ## getattr: rect.x0, rect.x1, rect.y0, rect.y1
+    def __getattr__(self, prop):
+        if prop[0] in ['x', 'y'] and prop[1:].isdigit():
+            a, i=prop[0], int(prop[1:])
+            return self.get_point(a, i)
+
+        raise AttributeError('unexpected attr: %s' % prop)
 
     # other frequently-used points
     def get_partition(self, axis, p):
