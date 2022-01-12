@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib import font_manager
 
-from .varlinear import LinearManager, LnComb
+from .linear import LinearManager, LnComb
 from .tools import map_to_nested, Units
 from .tools_class import add_proxy_method
 from .params import params_create_axes
