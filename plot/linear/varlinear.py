@@ -9,14 +9,16 @@
 '''
 
 import numbers
-import copy
 
 import numpy as np
 
+from .bases import LnComb, LnCoeffs, LnConflictError
+from .lneq import LnEqs
+from .tools import insert_iter_to_list, is_same_set, PrecisceComparator
+
 class LinearManager:
     '''
-        manager of variables
-        Linear constraints are traced and maintained dynamically.
+        manager of linear constraints of variables
     '''
     def __init__(self, size=int(1e3), precise=1e-10):
         '''
@@ -28,7 +30,7 @@ class LinearManager:
                     Too many variables would exhaust memory and tug calculation
 
                     If None, no limit
-                        be careful to set it
+                        cautious to set
 
                 precise: non-negative float, or None
                     number less than (or equal to) this number is thought as zero
@@ -38,644 +40,111 @@ class LinearManager:
                     if None, use normal equality
                         same as `precise`=0
         '''
-        assert precise is None or precise>=0, \
-                'only allow None or positive for precise'
-        if precise is None:
-            precise=0
-        self._precise=precise
+        # comparator
+        if not isinstance(precise, PrecisceComparator):
+            precise=PrecisceComparator(precise)
+        self._comp=precise   # comparator
 
-        if size is not None:
-            size=int(size)
-        self._size=size
+        # equality constraints
+        self._eqs=LnEqs(size, self._comp)
 
-        # container of vars
-        self._init_vars_container()
-
+    # copy
     def copy(self):
-        manager=self.__class__(self._size, self._precise)
+        obj=self.__class__()
+        obj._comp=self._comp
+        obj._eqs=self._eqs.copy()
 
-        manager._copy_vars_from(self)
+        return obj
 
-        return manager
-
-    # zero or nonzero within precise
-    def _is_zero(self, v):
-        '''
-            whether it is zero within precise
-
-            support number and ndarray for input `v`
-            if ndarray, return a boolean array
-        '''
-        return np.abs(v)<=self._precise
-
-    def _is_nonzero(self, v):
-        return np.logical_not(self._is_zero(v))
-
-    def _all_zero(self, a):
-        '''
-            whether elements in array are all zero
-        '''
-        return np.all(self._is_zero(a))
-
-    def _inds_nonzero(self, a):
-        '''
-            return indices of nonzero elements
-
-            if array is 1d, return an index array
-            otherwise, return tuple with len same as array's dimension
-        '''
-        a=np.asarray(a)
-
-        inds=np.nonzero(self._is_nonzero(a))
-
-        if a.ndim==1:
-            return inds[0]
-        return inds
-
-    # init of variables container
-    def _init_vars_container(self):
-        '''
-            init container of variables
-
-            3 types:
-                - basis vars:
-                    (v1, v2, ..., vn)
-                - lcomb vars: linear combination of basis (with a bias):
-                    k1*v1 + k2*v2 + ... + kn*vn + c
-                - const vars: constant
-        '''
-        # basis vars
-        self._basis_vars=[]
-
-        # linear combination:
-        self._lcomb_vars={}
-
-        # constant vars: {d: c}
-        self._const_vars={}
-
-    def _copy_vars_from(self, m):
-        '''
-            copy vars constraints from another manager
-        '''
-        self._basis_vars[:]=copy.deepcopy(m._basis_vars)
-
-        self._lcomb_vars.clear()
-        for k in m._lcomb_vars:
-            self._lcomb_vars[k]=copy.deepcopy(m._lcomb_vars[k])
-
-        self._const_vars.clear()
-        for k in m._const_vars:
-            self._const_vars[k]=copy.deepcopy(m._const_vars[k])
-
-    # vars size
-    def _get_len_vars(self):
-        '''
-            return total number of contained vars
-        '''
-        return len(self._basis_vars) + \
-               len(self._lcomb_vars) + \
-               len(self._const_vars)
-
-    def _check_size_vars(self, n=1):
-        '''
-            confirm not exceeding of max size
-                when add `n` new vars
-        '''
-        if self._size is None or n<=0:
-            return
-
-        assert self._get_len_vars()+n<=self._size, \
-                'too many variables, at most %i' % self._size
-
-    # base methods: variant type test
-    def _get_var_type(self, v):
-        '''
-            return type of variant
-                basis, lcomb, const, or not contained
-
-            basic method for other type tests
-        '''
-        if v in self._basis_vars:
-            return 'basis'  # basis
-
-        if v in self._lcomb_vars:
-            return 'lcomb'  # linear combination
-
-        if v in self._const_vars:
-            return 'const'  # constant
-
-        return None  # not contained
-
-    def _contains(self, v):
-        return self._get_var_type(v) is not None
-
-    def _is_basis_var(self, v):
-        return self._get_var_type(v)=='basis'
-    def _is_lcomb_var(self, v):
-        return self._get_var_type(v)=='lcomb'
-    def _is_const_var(self, v):
-        return self._get_var_type(v)=='const'
-
-    # base methods: for basis variables
-    def _get_len_basis(self):
-        '''
-            return number of basis vars
-        '''
-        return len(self._basis_vars)
-
-    def _get_basis_var_index(self, v):
-        '''
-            return index of a basis var
-        '''
-        return self._basis_vars.index(v)
-
-    def _get_basis_vars_list(self):
-        '''
-            return list of basis vars
-        '''
-        return list(self._basis_vars)
-
-    ## foced change of basis: modify of lcomb vars must follow
-    def _forced_add_new_basis_vars(self, vs, index='tail'):
-        '''
-            forced add of new vars as basis
-            return index and size inserted
-
-            incomplete process
-            modifying of lcomb vars must follow immediately
-                to maintain consistence of coeffs
-
-            Parameters:
-                vs: list of vars
-                    new vars to add
-
-                index: int or str 'head', 'tail'
-                    index to insert before
-
-                    if 'tail', append to the tail
-                    if 'head', insert at head
-                        same as index=0
-        '''
-        vs=list(vs)
-
-        # only support to add new vars
-        assert all([not self._contains(v) for v in vs]), \
-                'some vars already exists'
-
-        # vars size check
-        nnew=len(vs)
-        self._check_size_vars(nnew)
-
-        # index
-        if index=='tail':
-            index=self._get_len_basis()
-        elif index=='head':
-            index=0
-        assert isinstance(index, numbers.Integral), \
-                'expect integral for index, got %s' % type(index).__name__
-
-        # insert new vars
-        bs0=self._basis_vars
-        self._basis_vars[:]=bs0[:index]+vs+bs0[index:]
-
-        return index, nnew
-
-    def _forced_pop_basis_var(self, index):
-        '''
-            forced pop a basis var
-            return var name
-
-            incomplete process
-            modifying of lcomb vars must follow immediately
-                to maintain consistence of coeffs
-
-            Parameters:
-                index: int
-                    index of var to pop
-        '''
-        return self._basis_vars.pop(index)
-
-    # base methods for lcomb variables
-    def _init_lcomb_var_container(self, v):
-        '''
-            init container for coeffs and const
-                of a lcomb var `v`
-
-            coeffs: float array with len same as basis
-                initial values are all `nan`
-            const: `nan`
-
-            if already exists as lcomb, re-init `coeffs`
-                not change `const`
-        '''
-        is_lcomb=self._is_lcomb_var(v)
-        assert is_lcomb or not self._contains(v), \
-                'already exists as other type of var'
-
-        n=self._get_len_basis()
-        coeffs=_get_coeffs_container(n)
-
-        if not is_lcomb:
-            self._check_size_vars()
-            self._lcomb_vars[v]=dict(coeffs=coeffs, const=np.nan)
-        else:
-            self._lcomb_vars[v]['coeffs']=coeffs
-
-    def _set_lcomb_var_coeffs(self, v, coeffs):
-        '''
-            set coeffs of lcomb var
-
-            Parameters:
-                v: variant name
-                    must exist as lcomb var
-
-                coeffs: number, or list-like of number
-                    object that supports item assignment in ndarray
-        '''
-        assert not self._all_zero(coeffs), \
-                'all zero in coeffs. set a const var instead'
-        self._lcomb_vars[v]['coeffs'][:]=coeffs
-
-    def _set_lcomb_var_const(self, v, const):
-        '''
-            set const of lcomb var
-
-            Parameters:
-                v: variant name
-                    must exist as lcomb var
-
-                const: number
-                    constant bias
-        '''
-        self._lcomb_vars[v]['const']=float(const)
-
-    def _get_lcomb_vars_list(self):
-        '''
-            return list of lcomb vars
-        '''
-        return list(self._lcomb_vars.keys())
-
-    def _get_lcomb_var_coeffs(self, v):
-        '''
-            return coeffs of a lcomb var `v`
-        '''
-        return self._lcomb_vars[v]['coeffs']
-
-    def _get_lcomb_var_const(self, v):
-        '''
-            return const of a lcomb var `v`
-        '''
-        return self._lcomb_vars[v]['const']
-
-    def _get_lcomb_var_coeffs_const(self, v):
-        '''
-            return both coeffs and const of a lcomb var `v`
-        '''
-        return self._get_lcomb_var_coeffs(v), \
-               self._get_lcomb_var_const(v)
-
-    def _pop_lcomb_var(self, v):
-        '''
-            pop a lcom var
-            return coeffs and constant bias
-        '''
-        kc=self._get_lcomb_var_coeffs_const(v)
-        self._lcomb_vars.pop(v)
-        return kc
-
-    # base methods for const variables
-    def _base_set_const_var(self, v, const):
-        '''
-            set const var: v = c
-            base function
-
-            if not exists, create new var
-
-            Parameters:
-                v: str
-                    variant name
-
-                const: number
-                    constant bias, `c`
-        '''
-        is_const=self._is_const_var(v)
-        assert is_const or not self._contains(v)
-
-        if not is_const:  # new const var
-            self._check_size_vars()
-
-        self._const_vars[v]=float(const)
-
-    def _get_const_var_val(self, v):
-        '''
-            return value of constant var
-        '''
-        return self._const_vars[v]
-
-    def _pop_const_var(self, v):
-        '''
-            pop a constant var
-            return its value
-        '''
-        c=self._get_const_var_val(v)
-        self._const_vars.pop(v)
-        return c
-
-    ## upper level methods of nonbasis vars
-    def _add_new_lcomb_var(self, v, coeffs, const):
-        '''
-            add a new 'lcomb' var
-
-            if all zero in `coeffs`, add a new const var
-        '''
-        assert not self._contains(v)
-
-        if self._all_zero(coeffs):
-            self._base_set_const_var(v, const)
-            return
-
-        self._init_lcomb_var_container(v)
-        self._set_lcomb_var_coeffs(v, coeffs)
-        self._set_lcomb_var_const(v, const)
-
-    # change of basis: complete process
-    def _add_new_basis_vars(self, vs, index='tail'):
-        '''
-            complete process to add new basis
-        '''
-        # forced to change basis
-        ind, num=self._forced_add_new_basis_vars(vs, index=index)
-        ks0=[0]*num
-
-        # modify lcom vars to maintain consistence
-        keys=self._get_lcomb_vars_list()
-        for vi in keys:
-            ksi=list(self._get_lcomb_var_coeffs(vi))
-
-            self._init_lcomb_var_container(vi)
-            self._set_lcomb_var_coeffs(vi, ksi[:ind]+ks0+ksi[ind:])
-
-    def _var_basis_to_lcomb(self, v, coeffs, const, is_ind_v=True):
-        '''
-            change basis var `v`
-                to linear combination of other bases
-
-            Parameters:
-                v: var or int
-                    var name or index for basis var to change
-
-                coeffs, const: list-like and number
-                    linear combination for `v` with respect to other basis
-                    vi = k1*v1 + .. + k(i-1)*v(i-1) + k(i+1)*v(i+1) + .. 
-                            + kn*vn + c
-
-                is_ind_v: bool
-                    whether the given `v` is index or var name
-                    True for index
-        '''
-        if not is_ind_v:
-            ind=self._get_basis_var_index(v)
-        else:
-            ind=v
-
-        coeffs=np.asarray(coeffs)
-        const=float(const)
-
-        # forced to pop basis var
-        v=self._forced_pop_basis_var(ind)
-
-        # modify lcom vars to maintain consistence
-        keys=self._get_lcomb_vars_list()
-        for vi in keys:
-            ksi, ci=self._get_lcomb_var_coeffs_const(vi)
-
-            ksi=list(ksi)
-            k0=ksi.pop(ind)
-            ksi=np.array(ksi)
-
-            ci+=k0*const
-            ksi+=k0*coeffs
-
-            if self._all_zero(ksi):
-                self._pop_lcomb_var(vi)
-                self._base_set_const_var(vi, ci)
-                continue
-
-            self._init_lcomb_var_container(vi)
-            self._set_lcomb_var_coeffs(vi, ksi)
-            self._set_lcomb_var_const(vi, ci)
-
-        # add back as lcomb var: if all zero in coeffs, add const var
-        self._add_new_lcomb_var(v, coeffs, const)
-
-    def _var_basis_to_const(self, v, const, is_ind_v=True):
-        '''
-            change base var to const
-        '''
-        self._var_basis_to_lcomb(v, 0, const, is_ind_v=is_ind_v)
-
-    # add linear constrant among variables
-    def _add_vars_lcons(self, vs, coeffs=1, const=0):
+    # add linear constraint
+    def add_vars_lcons(self, vs, coeffs=1, const=0):
         '''
             add linear constraint of variables
-                k1*v1+k2*v2+...+kn*vn = c
-            where
-                v1, v2, .., vn: variables constrained
-                k1, k2, .., kn: coefficients
-                c: constant
+                k1*v1+k2*v2+...+kn*vn+c=0
+            where v1, .., vn are variables to constrain
 
             Parameters:
-                vs: list of str
-                    variables in constraint
+                vs: iterable
+                    variables to constrain
 
-                coeffs: list of number or scalar
-                    use function `_fill_coeffs_to_len`
-                        to array with len same as `vs`
+                coeffs: number or iterable
+                    coeffs, [k1, .., kn]
+
+                    if number, use `len(vs)` to extend as list
 
                 const: number
                     const
         '''
-        coeffs=_fill_coeffs_to_len(coeffs, len(vs))
-        const=float(const)
+        # reduce expression
+        vstot, kstot, ctot=self._eqs.reduce_express_of(vs, coeffs, const)
 
-        # transform to: Sum kb*vb + Sum ku*vu = c
-        #     where (vu) is unknown vars (not in manager)
-        #           (vb) is base vars
-        vs_bu=self._get_basis_vars_list()
-        nbase0=len(vs_bu)
-        ks_bu=[0]*nbase0
-
-        for v, k in zip(vs, coeffs):
-            if v in vs_bu:  # treat unknown vars as bases
-                i=vs_bu.index(v)
-                ks_bu[i]+=k
-                continue
-
-            # unknown vars
-            if not self._contains(v):
-                vs_bu.append(v)
-                ks_bu.append(k)
-                continue
-
-            if self._is_const_var(v):
-                c=self._get_const_var_val(v)
-                const-=k*c
-                continue
-
-            # linear combination
-            ks, c=self._get_lcomb_var_coeffs_const(v)
-            for i, ki in enumerate(ks):
-                ks_bu[i]+=k*ki
-            const-=k*c
-
-        ks_bu=np.array(ks_bu)
-        # inds_nonz=np.nonzero(ks_bu)[0]
-        inds_nonz=self._inds_nonzero(ks_bu)
+        # nonz
+        inds_nonz=list(self._comp.inds_nonzero(kstot))
 
         # identical eq: check conflict
         if len(inds_nonz)==0:
-            # assert const==0
-            assert self._is_zero(const), \
-                    'conflict constraint meeted'
+            ftest=self._comp.is_zero
+            if not ftest(ctot):
+                raise LnConflictError('conflict in adding cons')
             return
+
+        # vars with nonzero coeff exist
+        ilz=inds_nonz.pop()  # index of last nonz
+        vlz=vstot.pop(ilz)
+        klz=kstot.pop(ilz)
+
+        ks=np.array(kstot)
+        nb0=self._eqs.get_len_basis()
+
+        ## add other unknown vars as basis, if exists
+        self._eqs.add_new_basis_vars(vstot[nb0:])
 
         # constant
-        if len(inds_nonz)==1:
-            i=inds_nonz[-1]
-            k=ks_bu[i]
-
+        if not inds_nonz:
             # new constant
-            if i>=nbase0:  # unknown var
-                self._base_set_const_var(vs_bu[i], const/k)
-            else:          # basis to const
-                self._var_basis_to_const(i, const/k)
+            if ilz>=nb0:  # unknown var, skip new basis adding
+                self._eqs.add_new_const_var(vlz, -ctot/klz)
+            else:         # basis to const
+                self._eqs.set_basis_var_const(ilz, -ctot/klz,
+                                               use_ind=True)
 
             return
 
-        # at least 2 vars in 'Sum kb*vb + Sum ku*vu = c'
-        ks_b0=ks_bu[:nbase0]
-
-        inds_u=[i for i in inds_nonz if i>=nbase0] # unknown vars
-
-        ## unknown vars exist
-        if len(inds_u)>=1:
-            ci=inds_u.pop()  # vars as lcomb
-
-            v=vs_bu[ci]
-            k=ks_bu[ci]
-
-            ks=ks_b0
-
-            if len(inds_u)>=1:
-                vs_u=[vs_bu[i] for i in inds_u]
-                ks_u=[ks_bu[i] for i in inds_u]
-
-                self._add_new_basis_vars(vs_u)
-                ks=np.concatenate([ks, ks_u])
-
-            # add new lcomb var
-            self._add_new_lcomb_var(v, -ks/k, const/k)
-
+        # unknown vars exist
+        if ilz>=nb0:
+            self._eqs.add_new_lcomb_var(vlz, -ks/klz, -ctot/klz)
             return
 
         # no unknown vars
-        i=inds_nonz[-1]
-        k=ks_b0[i]
+        self._eqs.add_eq_to_basis_var(ilz, -ks/klz, -ctot/klz,
+                                       use_ind=True)
 
-        ks=np.concatenate([ks_b0[:i], ks_b0[(i+1):]])
-        self._var_basis_to_lcomb(i, -ks/k, const/k)
-
-    ## user method
-    def add_vars_lcons(self, *args, **kwargs):
-        return self._add_vars_lcons(*args, **kwargs)
-
-    # methods to handle LnComb instance
+    ## use LnComb, more user-friendly
     def add_lncomb(self, left, right=0):
         '''
             add constraint written as LnComb object
                 left = right
                 where both `left` and `right` are LnComb-like object
         '''
-        left=LnComb.lncomb_from(left)
-        right=LnComb.lncomb_from(right)
+        left=LnComb.lncomb(left)
+        right=LnComb.lncomb(right)
 
         p=left-right
 
-        vs, ks, c=p.get_vs_coeffs_const()
-        self._add_vars_lcons(vs, ks, -c)
+        vs, ks, c=p.get_vs_ks_c()
+        self.add_vars_lcons(vs, ks, c)
 
-    def repr_lncomb_with_basis(self, lncomb, return_lncomb=False,
-                                    remove_zeroterm=False,
-                                    raise_exception=True):
+    # evaluate based on the linear constraint
+    def reduce_express_of_lncomb(self, lncomb):
         '''
-            rerepsent a linear combination of variables
-                in a basis
+            return reduced expression of lncomb
 
-            return coeffs and const or LnComb instance
-
-            Parameters:
-                lncomb: LnComb-like object
-                    linear combination to convert
-
-                return_lncomb: bool
-                    if True, return LnComb instance
-                    otherwise, return tuple `(coeffs, const)`
-
-                remove_zeroterm: bool, default: False
-                    whether to remove term with coefficient ~ zero
-
-                raise_exception: bool, default: False
-                    if True, raise Exception when unknown vars contained
-                    otherwise return None
+            see `LnEqs.reduce_express_of` for detail
         '''
-        lncomb=LnComb.lncomb_from(lncomb)
-        if remove_zeroterm:
-            lncomb=lncomb.merge_like_terms()
-        vs, ks, c=lncomb.get_vs_coeffs_const()
+        lncomb=LnComb.lncomb(lncomb)
+        vs, ks, c=lncomb.get_vs_ks_c()
 
-        # remove zero term
-        if remove_zeroterm:
-            vs0, ks0=vs, ks
-            vs, ks=[], []
-            for vi, ki in zip(vs0, ks0):
-                if self._is_zero(ki):
-                    continue
-                vs.append(vi)
-                ks.append(ki)
-
-        # check whether exists unknown variables
-        if not all([self._contains(v) for v in vs]):
-            if raise_exception:
-                raise Exception('unknown vars met in LnComb')
-            else:
-                return None
-
-        coeffs=_get_coeffs_container(self._get_len_basis())
-        coeffs[:]=0
-
-        const=c
-
-        for v, k in zip(vs, ks):
-            if self._is_const_var(v):
-                c=self._get_const_var_val(v)
-                const+=k*c
-                continue
-
-            if self._is_basis_var(v):
-                i=self._get_basis_var_index(v)
-                coeffs[i]+=k
-                continue
-
-            # lcomb
-            ks, c=self._get_lcomb_var_coeffs_const(v)
-            coeffs+=k*ks
-            const+=k*c
-
-        if return_lncomb:
-            return LnComb(self._get_basis_vars_list(),
-                            coeffs, const)
-
-        return coeffs, const
+        return self._eqs.reduce_express_of(vs, ks, c)
 
     def eval_lncomb(self, lncomb):
         '''
@@ -683,15 +152,12 @@ class LinearManager:
 
             if not a constant result, return None
         '''
-        ksc=self.repr_lncomb_with_basis(lncomb, return_lncomb=False,
-                                                remove_zeroterm=True,
-                                                raise_exception=False)
-        if ksc is None:
+        # reduce based on eqs
+        vs, ks, c=self.reduce_express_of_lncomb(lncomb)
+
+        if not self._comp.all_zeros(ks):
             return None
 
-        ks, c=ksc
-        if not self._all_zero(ks):
-            return None
         return c
 
     def eval_ratio_of_lncombs(self, t0, t1):
@@ -700,302 +166,69 @@ class LinearManager:
 
             if not constant ratio, return None
         '''
-        kwargs=dict(return_lncomb=False, remove_zeroterm=True, raise_exception=False)
-        ksc0=self.repr_lncomb_with_basis(t0, **kwargs)
-        ksc1=self.repr_lncomb_with_basis(t1, **kwargs)
+        # reduce
+        vs0, ks0, c0=self.reduce_express_of_lncomb(t0)
+        vs1, ks1, c1=self.reduce_express_of_lncomb(t1)
 
-        if ksc0 is None or ksc1 is None:
-            # add unknown vars in new manager
-            t0=LnComb.lncomb_from(t0)
-            t1=LnComb.lncomb_from(t1)
+        # exists different unknown vars with nonzero coeff
+        if len(vs0)!=len(vs1):
+            return None
 
-            vs0=t0.get_vs_coeffs_const()[0]
-            vs1=t1.get_vs_coeffs_const()[0]
+        # same length
+        nb=self._eqs.get_len_basis()
+        if len(vs0)>nb:
+            # different vs set
+            if not is_same_set(vs0[nb:], vs1[nb:]):
+                return None
 
-            m=self.copy()
-            vs=[v for v in vs0+vs1 if not m._contains(v)]
-            m._add_new_basis_vars(vs)
-            return m.eval_ratio_of_lncombs(t0, t1)
+            # to same order of vars
+            map_vk1=dict(zip(vs1[nb:], ks1[nb:]))
+            ks1=ks1[:nb]
+            for v in vs0[nb:]:
+                ks1.append(map_vk1[v])
 
-        ks0, c0=ksc0
-        ks1, c1=ksc1
-        indsnz0=self._inds_nonzero(ks0)
-        indsnz1=self._inds_nonzero(ks1)
-        indsnz=[*indsnz0, *indsnz1]
+        # compute ratio
+        ksc0, ksc1=map(np.asarray, [[*ks0, c0], [*ks1, c1]])
 
-        if not indsnz:
-            ratios=(c0, c1)
+        inzs0=self._comp.inds_nonzero(ksc0)
+        inzs1=self._comp.inds_nonzero(ksc1)
+        inzs=[*inzs0, *inzs1]
+
+        if not inzs:  # all zeros
+            ratios=(c0, c1)  # ratio: c0/c1
         else:
-            i=indsnz[0]
-            k0, k1=ks0[i], ks1[i]
-            ratios=(k0, k1)
-
-            zk=self._all_zero(k1*ks0-k0*ks1)
-            zc=self._is_zero(k1*c0-k0*c1)
+            i=inzs[-1]
+            k0, k1=ksc0[i], ksc1[i]
 
             # not ratio
-            if not (zk and zc):
+            if not self._comp.all_zeros(k1*ksc0-k0*ksc1):
                 return None
+
+            ratios=(k0, k1)
 
         return ratios[0]/ratios[1]
 
     # print
-    def info(self):
+    def info(self, indent=' '*4):
         '''
             print equations in manager
         '''
-        vbs=self._get_basis_vars_list()
+        # indent
+        if isinstance(indent, numbers.Integral):
+            indent=' '*indent
+        elif not isinstance(indent, str):
+            raise TypeError('only allow int or str as `indent`')
 
-        for vi in self._lcomb_vars:
-            ks, c=self._get_lcomb_var_coeffs_const(vi)
+        # print
+        vbs=self._eqs.get_list_basis()
 
-            ks=[0 if self._is_zero(k) else k
-                    for k in ks]
+        print('eqs:')
+        for v, (ks, c) in self._eqs.iter_lcomb_items():
+            *ks, c=self._comp.filter([*ks, c])
+            print(indent+'%s = %s' % (v, LnComb(vbs, ks, c)))
 
-            print('%s = %s' % (vi, str(LnComb(vbs, ks, c))))
-
-        for v, c in self._const_vars.items():
-            if self._is_zero(c):
-                c=0
-            print('%s = %s' % (v, str(LnComb(const=c))))
+        for v, c in self._eqs.iter_const_items():
+            c=self._comp.filter(c)
+            print(indent+'%s = %s' % (v, LnComb(const=c)))
 
         print('basis:', ', '.join(vbs))
-
-class LnComb:
-    '''
-        class for linear combination with a bias
-            k1*v1 + ... + kn*vn + c
-    '''
-    def __init__(self, vs=[], coeffs=1, const=0):
-        '''
-            init of linear combination class
-        '''
-        self._vars=list(vs)
-
-        # const
-        self._const=float(const)
-
-        # coeffs
-        n=len(self._vars)
-        _coeffs=_get_coeffs_container(n)
-        _coeffs[:]=_fill_coeffs_to_len(coeffs, n)
-
-        self._coeffs=_coeffs
-
-    def copy(self):
-        return self.__class__(self._vars, self._coeffs, self._const)
-
-    def get_vs_coeffs_const(self):
-        return self._vars, self._coeffs, self._const
-
-    # merge like terms
-    def merge_like_terms(self):
-        '''
-            merge like terms with same variant
-        '''
-        vs=[]
-        ks=[]
-
-        vs0, ks0, c=self.get_vs_coeffs_const()
-        for v, k in zip(vs0, ks0):
-            if v not in vs:
-                vs.append(v)
-                ks.append(k)
-            else:
-                i=vs.index(v)
-                ks[i]+=k
-
-        return self.__class__(vs, ks, c)
-
-    # constant
-    def is_const(self):
-        t=self.merge_like_terms()
-        if len(t._vars)==0:
-            return True
-        return False
-
-    def asfloat(self):
-        '''
-            convert to float if const
-        '''
-        t=self.merge_like_terms()
-        assert len(t._vars)==0, 'not constant LnComb'
-
-        return t._const
-
-    # construct from other object
-    @classmethod
-    def lncomb_from(cls, t):
-        '''
-            return LnComb instance constructed from `t`
-
-            suport 3 types
-                - LnComb
-                    return itself
-
-                - number
-                    return a const term
-
-                - object with method `to_lncomb`
-                    return `t.to_lncomb()`
-        '''
-        if isinstance(t, cls):
-            return t
-
-        if isinstance(t, numbers.Number):
-            return cls(const=t)
-
-        if hasattr(t, 'to_lncomb'):
-            t=t.to_lncomb()
-            assert isinstance(t, cls), \
-                    'unexpected type returned from `to_lncomb`: ' + \
-                    type(t).__name__
-            return t
-
-        raise TypeError('unsupported type to convert to %s: %s'
-                            % (cls.__name__, type(t).__name__))
-
-    # arithmetic
-    def __add__(self, p):
-        '''
-            return self + p
-
-            p must be object which could be passed to `as_lncomb`
-        '''
-        p=self.lncomb_from(p)
-
-        vs0, ks0, c0=self.get_vs_coeffs_const()
-        vs1, ks1, c1=p.get_vs_coeffs_const()
-
-        return self.__class__([*vs0, *vs1], [*ks0, *ks1], c0+c1)
-
-    def __mul__(self, k):
-        '''
-            return self*k
-            only support number for k
-
-            self: k1*v1 + .. + kn*vn + c
-            return (k*k1)*v1 + .. + (k*kn)*vn + (k*c)
-        '''
-        assert isinstance(k, numbers.Number), \
-                'only support number type for k, ' \
-                'but got %s' % type(k).__name__
-
-        vs, ks, c=self.get_vs_coeffs_const()
-        return self.__class__(vs, ks*k, c*k)
-
-    ## other arithmetics based on `add` and `mul`
-    def __pos__(self):
-        # +self
-        return self.copy()
-
-    def __neg__(self):
-        # -self
-        return self.__mul__(-1)
-
-    def __radd__(self, p):
-        # p+self
-        return self.lncomb_from(p).__add__(self)
-
-    def __sub__(self, p):
-        # self - p
-        return self.__add__(self.lncomb_from(p).__neg__())
-
-    def __rsub__(self, p):
-        # p-self
-        return self.lncomb_from(p).__sub__(self)
-
-    def __rmul__(self, k):
-        # k*self
-        return self.__mul__(k)
-
-    def __truediv__(self, k):
-        # self/k
-        return self.__mul__(1/k)
-
-    ## to float if const
-    def __float__(self):
-        '''
-            to float if const
-        '''
-        return self.asfloat()
-
-    # to string and print
-    def _flt_fmt(self, k):
-        '''
-            formatter of float
-        '''
-        if int(k)==k:
-            return str(int(k))
-        return '%.4g' % k
-
-    def _join_str_terms(self, terms):
-        '''
-            join string of terms
-        '''
-        s=''
-        for t in terms:
-            if not s or t.startswith('-'):
-                s+=t
-            else:
-                s+='+'+t
-        return s
-
-    def __str__(self):
-        vs, ks, c=self.get_vs_coeffs_const()
-
-        terms=[]
-        for k, v in zip(ks, vs):
-            if k==0:
-                continue
-
-            if np.abs(k)!=1:
-                sk=self._flt_fmt(k)
-                terms.append(sk+'*'+v)
-            elif k==1:
-                terms.append(v)
-            else:
-                terms.append('-'+v)
-
-        if c!=0 or not terms:
-            terms.append(self._flt_fmt(c))
-
-        return self._join_str_terms(terms)
-
-    def __repr__(self):
-        return '%s(%s, %s, %s)' % (self.__class__.__name__,
-                                   repr(self._vars),
-                                   repr(list(self._coeffs)),
-                                   repr(self._const))
-
-# auxiliary functions
-def _fill_coeffs_to_len(coeffs, n):
-    '''
-        fill a given coeffs to array with len `n`
-
-        4 type of `coeffs`
-            - scalar: k
-                return [k]*n
-            - list-like with len < n
-                fill 0 in end
-            - list-like with len == n
-                return itself
-            - list-like with len > n
-                raise Exception
-    '''
-    if isinstance(coeffs, numbers.Number):
-        return [coeffs]*n
-
-    nc=len(coeffs)
-    if nc<n:
-        coeffs=list(coeffs)+([0]*(n-nc))
-    elif nc>n:
-        raise Exception('unexpected len for coeffs: %i' % nc)
-
-    return coeffs
-
-def _get_coeffs_container(n):
-    '''
-        return container for coeffs with len `n`
-    '''
-    return np.full(n, np.nan, dtype='float64')

@@ -185,7 +185,7 @@ class RectManager:
 
         # construct LnComb
         if unit in Units:
-            return LnComb.lncomb_from(Units[unit])
+            return LnComb.lncomb(Units[unit])
 
         if unit=='pixel':
             return LnComb([self._VAR_INV_DPI], 1, 0)
