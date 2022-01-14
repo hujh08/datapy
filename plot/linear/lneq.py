@@ -6,8 +6,8 @@
 
 import numbers
 
-from .bases import LnCoeffs
-from .tools import PrecisceComparator, insert_iter_to_list
+from .bases import LnCoeffs, LnComb
+from .tools import PrecisceComparator, insert_iter_to_list, get_indent
 
 class LnEqs:
     '''
@@ -222,16 +222,15 @@ class LnEqs:
         self._const_vars[v]=c
 
     # basis var
-    def add_new_basis_vars(self, vs, index='tail'):
+    def insert_new_basis_vars(self, index, vs):
         '''
             add new basis vars before an index
-            return index and size inserted
 
             Parameters:
                 vs: iterable
                     list of variables to add as basis
 
-                index: int, 'head' or 'tail'
+                index: int
                     position of new vars
         '''
         # iterable vs
@@ -247,15 +246,6 @@ class LnEqs:
         if any([self.contains(v) for v in vs]):
             raise ValueError('some vars in `vs` already exists')
 
-        # index
-        if index=='tail':
-            index=len(self._basis_vars)
-        elif index=='head':
-            index=0
-        elif not isinstance(index, numbers.Integral):
-            raise TypeError(
-                'only allow int, \'head\', \'tail\' as `index`')
-
         # insert new vars
         insert_iter_to_list(self._basis_vars, index, vs, inplace=True)
 
@@ -263,15 +253,21 @@ class LnEqs:
         for ksci in self._lcomb_vars.values():
             ksci.insert_zeros(index, num)
 
-        return index, num
-
-    def add_new_basis_var(self, v, index='tail'):
+    ## append to end
+    def append_new_basis_vars(self, vs):
         '''
-            add one basis var
+            append new vars to end of basis
         '''
-        return self.add_new_basis_vars([v], index)
+        self.insert_new_basis_vars(len(self._basis_vars), vs)
 
-    def add_eq_to_basis_var(self, v, coeffs, const, use_ind=True):
+    def append_new_basis_var(self, v):
+        '''
+            append one var to basis
+        '''
+        self.append_new_basis_vars([v])
+
+    ## eq constraint between basis
+    def add_eq_to_basis_var(self, ind, coeffs, const):
         '''
             add eq constraint to basis var
                 vi = k1*v1 + .. +
@@ -282,8 +278,8 @@ class LnEqs:
 
             ===========
             Parameters:
-                v: variable or int
-                    variable name or index for basis var to change
+                ind: int int
+                    index for basis var to change
 
                 coeffs: number or iterable
                     coeffs, ks=[k1, ..., kn]
@@ -292,21 +288,8 @@ class LnEqs:
 
                 const: number
                     const bias, c
-
-                use_ind: bool
-                    whether the given `v` is index or variable name
-                    True for index
-
-            Return:
-                index of var, and
-                LnCoffs(ks, c)
         '''
-        if not use_ind:
-            ind=self._basis_vars.index(v)
-        else:
-            ind=v
-
-        # pop
+        # pop basis
         v=self._basis_vars.pop(ind)
 
         # ksc
@@ -335,15 +318,6 @@ class LnEqs:
             self._const_vars[v]=ksc.const
         else:
             self._lcomb_vars[v]=ksc
-
-        return ind, ksc
-
-    def set_basis_var_const(self, v, const, use_ind=True):
-        '''
-            set a basis var to const
-                special linear constraint, with coeffs=0
-        '''
-        self.add_eq_to_basis_var(v, 0, const, use_ind=use_ind)
 
     # express linear combinations
     def reduce_express_of(self, vs, coeffs, const):
@@ -437,6 +411,13 @@ class LnEqs:
             return number of basis
         '''
         return len(self._basis_vars)
+    numbasis=property(get_len_basis, doc='number of basis vars')
+
+    def get_basis_ind(self, v):
+        '''
+            get index of a basis var
+        '''
+        return self._basis_vars.index(v)
 
     def get_list_basis(self):
         '''
@@ -444,14 +425,35 @@ class LnEqs:
         '''
         return list(self._basis_vars)
 
-    def iter_lcomb_items(self):
+    # to string
+    def get_lines_of_eqs(self):
         '''
-            iter along lcomb vars
+            get lines of eqs
         '''
-        return iter(self._lcomb_vars.items())
+        lines=[]
+        vbs=self._basis_vars
+        for v, (ks, c) in self._lcomb_vars.items():
+            *ks, c=self._comp.filter([*ks, c])
+            lines.append('%s = %s' % (v, LnComb(vbs, ks, c)))
 
-    def iter_const_items(self):
+        for v, c in self._const_vars.items():
+            c=self._comp.filter(c)
+            lines.append('%s = %s' % (v, LnComb(const=c)))
+
+        return lines
+
+    def get_str_of_eqs(self, indent=None):
         '''
-            iter along const vars
+            str of eqs
         '''
-        return iter(self._const_vars.items())
+        lines=self.get_lines_of_eqs()
+        if indent:
+            indent=get_indent(indent)
+            lines=[indent+l for l in lines]
+        return '\n'.join(lines)
+
+    def __str__(self):
+        return self.get_str_of_eqs()
+
+    def info(self, indent=None):
+        print(self.get_str_of_eqs(indent))

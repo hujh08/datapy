@@ -38,7 +38,7 @@ class LnCoeffs:
 
             c: single attribute
     '''
-    def __init__(self, ks, c, dtype=None):
+    def __init__(self, ks, c, dtype=None, fixed_dtype=None):
         '''
             init work
 
@@ -59,8 +59,20 @@ class LnCoeffs:
 
                     if not given, determined by
                         `np.array` or
-                        `np.empty` (give int `ks`)
+                        `np.empty` (int `ks` given)
+
+                fixed_dtype: bool or None
+                    whether to raise dtype if value to set has higher type
+                        for example, set float to int array
+
+                    if None, False if `dtype` not given
+                             True  otherwise
         '''
+        # dtype fixed
+        if fixed_dtype is None:
+            fixed_dtype=False if dtype is None else True
+        self._fixed_dtype=fixed_dtype
+
         # coeffs
         if isinstance(ks, abc.Iterable):
             ks=np.array(ks, dtype=dtype)
@@ -110,12 +122,46 @@ class LnCoeffs:
         '''
             change dtype of ks array
         '''
+        if self._dtype==dtype:
+            return
+
         ks=self._ks.astype(dtype)
         if not self._is_valid_ks_dtype(ks.dtype):
             raise TypeError('invalid dtype for ks')
 
         self._ks=ks
         self._dtype=ks.dtype
+
+    def set_fixed_dtype(self, dtype=None):
+        '''
+            set ks dtype fixed
+
+            :param dtype: dtype
+                fixed dtype
+                if None, use current dtype
+        '''
+        if dtype is not None:
+            self.to_dtype(dtype)
+
+        self._fixed_dtype=True
+
+    def set_flex_dtype(self):
+        '''
+            set ks dtype flexible
+        '''
+        self._fixed_dtype=False
+
+    def _raise_dtype_for_ks_set(self, v):
+        '''
+            raise dtype of ks
+                if value to set has higher dtype
+        '''
+        if self._fixed_dtype:
+            return
+
+        v=np.asarray(v)
+        if v.dtype>self._dtype:
+            self.to_dtype(v.dtype)
 
     # copy
     def copy(self):
@@ -173,19 +219,23 @@ class LnCoeffs:
         return isinstance(c, numbers.Number)
 
     # setter
+    def set_ks_items(self, inds, vs):
+        '''
+            set part of ks
+            base method
+
+            used like array set: array[inds]=vs
+        '''
+        vs=np.asarray(vs)
+        self._raise_dtype_for_ks_set(vs)
+
+        self._ks[inds]=vs
+
     def set_ks(self, ks):
         '''
             set coeffs, `ks`
         '''
-        self._ks[:]=ks
-
-    def set_ks_items(self, inds, vs):
-        '''
-            set part of ks
-
-            used like array set: array[inds]=vs
-        '''
-        self._ks[inds]=vs
+        self.set_ks_items(slice(None), ks)
 
     def set_c(self, c):
         '''
@@ -274,7 +324,7 @@ class LnCoeffs:
             assert len(ks)==len(self._ks) and ks.ndim==1,\
                     'mismatch len between `ks`'
 
-        self._ks[:]+=ks
+        self.set_ks(self._ks+ks)
 
     def inc_c_by(self, c):
         '''
@@ -294,14 +344,14 @@ class LnCoeffs:
         '''
             multiply `ks` by a factor `t`
         '''
-        assert isinstance(t, numbers.Real), 'only allow mul by float'
-        self._ks*=t
+        assert isinstance(t, numbers.Number), 'only allow mul by number'
+        self.set_ks(self._ks*t)
 
     def mul_c_by(self, t):
         '''
             multiply `c` by a factor `t`
         '''
-        assert isinstance(t, numbers.Real), 'only allow mul by float'
+        assert isinstance(t, numbers.Number), 'only allow mul by number'
         self._c*=t
 
     def mul_ks_c_by(self, t):

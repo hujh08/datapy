@@ -26,6 +26,31 @@ def insert_iter_to_list(container, index, iterable, inplace=True):
 
     return vals
 
+# product of iters
+def iter_prod(*iters):
+    '''
+        iter along product of multi-iterators
+
+        no yield when no args given
+    '''
+    if iters:
+        n=len(iters)
+        for vs in _iter_prod(iters):
+            yield vs[0] if n==1 else vs
+
+## auxiliary
+def _iter_prod(iters):
+    '''
+        recursion to yield product of iters
+    '''
+    if not iters:
+        yield ()
+    else:
+        iter0, *iters=iters
+        for v0 in iter0:
+            for vs in _iter_prod(iters):
+                yield (v0, *vs)
+
 # compare two sets
 def is_same_set(s0, s1):
     '''
@@ -89,6 +114,21 @@ class PrecisceComparator:
             return inds[0]
         return inds
 
+    ## inequality
+    def is_le_zero(self, v):
+        '''
+            wheter less than or equal to 0 within precise
+                `v` <= 0
+        '''
+        return v<=self._precise
+
+    def is_ge_zero(self, v):
+        '''
+            wheter greater than or equal to 0 within precise
+                `v` >= 0
+        '''
+        return -v<=self._precise
+
     # filter
     def filter(self, a):
         '''
@@ -100,3 +140,22 @@ class PrecisceComparator:
             return 0 if self.is_zero(a) else a
 
         return [0 if self.is_zero(k) else k for k in a]
+
+## normal comparator
+NormComp=PrecisceComparator()
+
+# indent str
+def get_indent(indent=None):
+    '''
+        return str for indent
+
+        support constructing indent by giving int
+    '''
+    if indent is None:
+        return ''
+        
+    if isinstance(indent, numbers.Integral):
+        indent=' '*indent
+    elif not isinstance(indent, str):
+        raise TypeError('only allow int or str as `indent`')
+    return indent
