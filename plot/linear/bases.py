@@ -539,6 +539,20 @@ class LnComb:
     def get_vs_ks_c(self):
         return self._vars, *self._ksc
 
+    def get_vs(self):
+        return list(self._vars)
+
+    def get_ks(self):
+        return self._ksc.get_ks()
+
+    def get_c(self):
+        return self._ksc.get_c()
+
+    # properties
+    vs=property(get_vs, doc='list of variables')
+    ks=coeffs=property(get_ks, doc='coeffs')
+    const=property(get_c, doc='const bias')
+
     # merge like terms
     def merge_like_terms(self):
         '''
