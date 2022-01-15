@@ -17,7 +17,7 @@ def params_create_axes(style):
                             no ylabel if not bottom
     '''
     if style=='tight grid':
-        return dict(tick_params=dict(direction='in', top=True, right=True),
+        return dict(tick_params=dict(which='both', direction='in', top=True, right=True),
                     nlnx=True, nbny=True)
 
     raise ValueError('unexpected style: \'%s\'' % style)

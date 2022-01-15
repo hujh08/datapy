@@ -66,6 +66,7 @@ EOF
 # subfolders
 subds=(io plot gui)
 
+
 for subd in "${subds[@]}"
 do
     echo "cp dir: $subd ==> $libdir/$package/$subd"

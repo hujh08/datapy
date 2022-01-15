@@ -42,8 +42,8 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib import font_manager
 
-from .varlinear import LinearManager, LnComb
-from .tools import map_to_nested, Units
+from .linear import LinearManager, LnComb
+from .tools import map_to_nested, confirm_arg_in, Units
 from .tools_class import add_proxy_method
 from .params import params_create_axes
 
@@ -185,12 +185,12 @@ class RectManager:
 
         # construct LnComb
         if unit in Units:
-            return LnComb.lncomb_from(Units[unit])
+            return LnComb.lncomb(Units[unit])
 
         if unit=='pixel':
             return LnComb([self._VAR_INV_DPI], 1, 0)
 
-    def get_dist_in_points(self, size):
+    def get_points_size(self, size=1):
         '''
             return LnComb for given `size` in unit of points
             const of LnComb is in unit of inches
@@ -240,18 +240,139 @@ class RectManager:
         s=font_scalings[size]
         return (s*fontsize)*pts
 
+    # tick size
+    def get_ticksize(self, axis, item='tick', which='major'):
+        '''
+            get size of x/y-tick
+                for label, pad, tick
+
+            ==============
+            Parameters:
+                axis: 'x' or 'y'
+                    axis
+                    only 'x' or 'y'
+
+                item: 'tick', 'lab', 'pad'
+                    which item
+
+                which: 'major' or 'minor'
+                    not acts for 'lab'
+
+            ==============
+            Return:
+                LnComb:
+                    with const in unit of inches
+        '''
+        # check
+        axes=['x', 'y']
+        confirm_arg_in(axis, axes, 'axis')
+
+        items=['tick', 'lab', 'pad']
+        confirm_arg_in(item, items, 'item')
+
+        whichs=['major', 'minor']
+        confirm_arg_in(which, whichs, 'which')
+
+        # item
+        if item=='lab': # item
+            v=plt.rcParams[axis+'tick.labelsize']
+            return self.get_fontsize(v)
+
+        # tick or pad
+        if item=='tick':
+            item='size'
+        key='%stick.%s.%s' % (axis, which, item)
+        v=plt.rcParams[key]
+        return self.get_points_size(v)
+
+    def get_sepsize_tick(self, axis, out=True, nchar=1):
+        '''
+            separation size for whole x/y-tick plot
+                along perpendicular direction
+            that is sum of sizes of label, tick and pad
+
+            always used to constrain min separation between axes,
+                such that not overlap
+
+            ==============
+            Parameters:
+                axis: 'x' or 'y'
+
+                out: bool
+                    whether has tick out
+
+                    tick direction could be 'in', 'out', 'inout'
+
+                nchar: int
+                    number of chars in perpendicular direction
+
+                    alway 1 char for x-axis along y-direction
+
+            ==============
+            Return:
+                LnComb:
+                    with const in unit of inches
+        '''
+        labsize=self.get_ticksize(axis, 'lab').const
+        padsize=max([self.get_ticksize(axis, 'pad', t).const
+                        for t in ['major', 'minor']])
+
+        v=nchar*labsize+padsize
+
+        if out:
+            ticksize=max([self.get_ticksize(axis, 'tick', t).const
+                            for t in ['major', 'minor']])
+            v+=ticksize
+
+        return LnComb.lncomb(v)
+
+    ## sep size for axis
+    def get_sepsize_axis(self, axis,
+                               lab=True, nchar_lab=1,
+                               tick_out=True, nchar_tick=1):
+        '''
+            min separation size for x/y-axis plot
+            that is sum of size of tick plot,
+                                   axes label,
+                                   axes pad
+        '''
+        s=self.get_ticksize(axis, out=tick_out, nchar=nchar_tick)
+
+        if lab:
+            labsize=self.get_fontsize(rcParams['axes.labelsize'])
+            labpad=self.get_fontsize(rcParams['axes.labelpad'])
+
+            s=s+nchar_lab*labsize+labpad
+
+        return s
+
     # constraint for var manager
-    def _add_lncomb(self, left, right=0):
+    def _add_lncomb(self, left, right=0, ineq=False):
         '''
             add constraint as
-                `left` = `right`
+                left = right
 
             Parameters:
                 left, right: LnComb-support obj
                     LnComb instance, int, or
                     object with attr `to_lncomb`
+
+                ineq: bool, or str
+                    whether add ineq
+
+                    for str, only support:
+                        upper: 'upper', 'le', '<='
+                        lower: 'lower', 'ge', '>='
         '''
-        self._vars.add_lncomb(left, right)
+        self._vars.add_lncomb(left, right, ineq=ineq)
+
+    def _add_lncomb_ineq(self, left, right=0, upper=True):
+        '''
+            add ineq
+                left <= right if `upper` is True
+                left >= right otherwise
+        '''
+        self._vars.add_lncomb_ineq(left, right, upper=upper)
 
     ## evaluate
     def _eval_lncomb(self, lncomb):
@@ -261,6 +382,14 @@ class RectManager:
             if not determined, return None
         '''
         return self._vars.eval_lncomb(lncomb)
+
+    def _eval_bounds_of_lncomb(self, lncomb):
+        '''
+            eval bounds of a linear combination
+            return pair (l, u)
+                None for non-determined in each side
+        '''
+        return self._vars.eval_bounds_of_lncomb(lncomb)
 
     def _eval_ratio_of_lncombs(self, t0, t1):
         '''
@@ -277,11 +406,20 @@ class RectManager:
         '''
         return self._eval_lncomb(t)
 
-    def eval_ratio(self, t, to):
+    def eval_bounds(self, t):
         '''
-            eval t/to
+            eval bounds of linear combination
+            return (l, u)
+                if one of `l` or `u` is None,
+                    means non-determined
         '''
-        return self._eval_ratio_of_lncombs(t, to)
+        return self._eval_bounds_of_lncomb(t)
+
+    def eval_ratio(self, t1, t2):
+        '''
+            eval t1/t2
+        '''
+        return self._eval_ratio_of_lncombs(t1, t2)
 
     def set_equal(self, t0, *args):
         '''
@@ -352,6 +490,88 @@ class RectManager:
                     distances to set equal
         '''
         self.set_equal(d0, d1, *args)
+
+    def set_dists_bound(self, d, *args, upper=True):
+        '''
+            set dists' bound
+
+            :param upper: bool
+                if True, set upper bound
+        '''
+        for di in args:
+            self._add_lncomb_ineq(di, d, upper=upper)
+
+    def set_dists_le(self, maxd, *args):
+        '''
+            set dists less-equal to a value
+        '''
+        self.set_dists_bound(maxd, *args, upper=True)
+
+    def set_dists_ge(self, mind, *args):
+        '''
+            set dists greater-equal to a value
+        '''
+        self.set_dists_bound(mind, *args, upper=False)
+
+    def set_dists_nonneg(self, *args):
+        '''
+            set all dists non-neg
+        '''
+        self.set_dists_ge(0, *args)
+
+    def set_dists_lim(self, lim, *args):
+        '''
+            set limited range for dists
+
+            allown None for a bound
+                if None, skip it
+        '''
+        l, u=lim
+
+        if l is not None:
+            self.set_dists_ge(l, *args)
+
+        if u is not None:
+            self.set_dists_le(u, *args)
+
+    ## set to min or max bound
+    def set_to_bound(self, d, lu):
+        '''
+            set dist to a bound
+
+            :param lu: int
+                0 for lower, 1 for upper
+        '''
+        b=self.eval_bounds(d)[lu]
+        self.set_equal(d, b)
+
+    def set_to_min(self, d):
+        '''
+            set dist to its lower bound
+        '''
+        self.set_to_bound(d, 0)
+
+    def set_to_max(self, d):
+        '''
+            set dist to its upper bound
+        '''
+        self.set_to_bound(d, 1)
+
+    ### set width or height to bounds
+    def set_width_to_min(self):
+        '''
+            set width to its lower bound
+        '''
+        self.set_to_min(self.get_width())
+
+    def set_width_to_max(self):
+        self.set_to_max(self.get_width())
+
+    def set_height_to_min(self):
+        self.set_to_min(self.get_height())
+
+    def set_height_to_max(self):
+        self.set_to_max(self.get_height())
 
     # create figure
     ## figure size
@@ -872,7 +1092,7 @@ class RectGrid:
         '''
         return self._get_ith_rect(i)
 
-    def get_rects(self, arg='row', overlap=False):
+    def get_rects(self, arg='row', reverse=False, overlap=False):
         '''
             return collection of rects
 
@@ -888,17 +1108,22 @@ class RectGrid:
                         e.g. int for ith rect
                     return collection with same organization
 
+                reverse: bool
+                    whether reverse order of rects
+
+                    only acts when arg is str
+
                 overlap: bool
                     whether allow overlap rect in exactly same region
 
                     if True, always create new rect even in same region
         '''
         if isinstance(arg, str):
-            return self._get_rects_by_str(arg)
+            return self._get_rects_by_str(arg, reverse=reverse)
         return self._get_rects_by_inds(arg, overlap=overlap)
 
     ### auxiliary functions
-    def _get_rects_by_str(self, s):
+    def _get_rects_by_str(self, s, reverse=False):
         '''
             real work to get rects for
                 'row', 'col', 'all'
@@ -915,6 +1140,9 @@ class RectGrid:
             inds=np.ravel(inds)
         elif s=='col':
             inds=np.transpose(inds)
+
+        if reverse:
+            inds=np.flip(inds, axis=-1)
 
         return self._get_rects_by_inds(inds)
 
@@ -1018,6 +1246,10 @@ class RectGrid:
         return self._get_ith_point(axis, i)
     get_point.__doc__=_get_ith_point.__doc__
 
+    def get_all_points(self, axis):
+        n=dict(x=self._nx, y=self._ny)[axis]
+        return [self._get_ith_point(axis, i) for i in range(n)]
+
     def get_left(self, i):
         '''
             return left point of ith column
@@ -1040,20 +1272,32 @@ class RectGrid:
         return self._get_ith_point('y', 2*i+1)
 
     # 1d distance
-    def get_width(self, i):
+    def get_width(self, i=None):
         '''
             width of ith column
+
+            if i is None, return total width
         '''
-        p0=self.get_left(i)
-        p1=self.get_right(i)
+        if i is None:
+            p0=self.get_left(0)
+            p1=self.get_right(-1)
+        else:
+            p0=self.get_left(i)
+            p1=self.get_right(i)
         return LineSeg1D(p0, p1)
 
-    def get_height(self, i):
+    def get_height(self, i=None):
         '''
             height of ith row
+
+            if i is None, return total height
         '''
-        p0=self.get_bottom(i)
-        p1=self.get_top(i)
+        if i is None:
+            p0=self.get_bottom(0)
+            p1=self.get_top(-1)
+        else:
+            p0=self.get_bottom(i)
+            p1=self.get_top(i)
         return LineSeg1D(p0, p1)
 
     def get_wspace(self, i):
@@ -1116,12 +1360,16 @@ class RectGrid:
         '''
             return list of margins along x-axis
         '''
+        if self._parent is None:
+            return []
         return [self.get_margin('x', i) for i in range(2)]
 
     def get_all_hmargins(self):
         '''
             return list of margins along x-axis
         '''
+        if self._parent is None:
+            return []
         return [self.get_margin('y', i) for i in range(2)]
 
     ## get collection of dists in group
@@ -1202,14 +1450,59 @@ class RectGrid:
         for di, vi in zip(dists, vals):
             di.set_to(vi)
 
-    def set_dists_equal(self, dist_group='xy'):
+    def set_dists_bound(self, val, dist_group='sep', upper=True):
+        '''
+            set dists' bound
+        '''
+        dists=self.get_dists_by_group(dist_group)
+        self._manager.set_dists_bound(val, *dists, upper=upper)
+
+    def set_dists_le(self, maxd, dist_group='width'):
+        '''
+            set group of dists less-or-equal to val
+
+            :param dist_group: str
+                dist group
+                    'width', 'height', 'wspace', 'hspace'
+                    'wmargin', 'hmargin', 'margin', 'sep'
+                see `get_dists_by_group` for detail
+        '''
+        self.set_dists_bound(maxd, dist_group, upper=True)
+
+    def set_dists_ge(self, mind, dist_group='sep'):
+        '''
+            set group of dists greater-or-equal to val
+            usually used to set not too small separation
+
+            :param dist_group: str
+                dist group
+                    'width', 'height', 'wspace', 'hspace'
+                    'wmargin', 'hmargin', 'margin', 'sep'
+                see `get_dists_by_group` for detail
+        '''
+        self.set_dists_bound(mind, dist_group, upper=False)
+
+    def set_dists_lim(self, lim, dist_group='sep'):
+        '''
+            set lim for group of dists 
+
+            :param dist_group: str
+                dist group
+                    'width', 'height', 'wspace', 'hspace'
+                    'wmargin', 'hmargin', 'margin', 'sep'
+                see `get_dists_by_group` for detail
+        '''
+        dists=self.get_dists_by_group(dist_group)
+        self._manager.set_dists_lim(lim, *dists, upper=upper)
+
+    def set_dists_equal(self, dist_group='bbox'):
         '''
             set collection of dists equal
 
             Parameters:
                 dist_group: 'width', 'height', 'wspace', 'hspace'
                            'wmargin', 'hmargin', 'margin', 'sep'
-                           or 'x', 'y', 'xy'
+                           or 'x', 'y', 'xy', 'bbox'
 
                     group of dist to set equal
 
@@ -1217,6 +1510,12 @@ class RectGrid:
                         set
                             all dists along one or both axis
                                 with same type
+                        equal
+
+                    if 'bbox',
+                        set
+                            all dists inside bbox
+                                that are width, height, wspace, hspace
                         equal
 
         '''
@@ -1231,6 +1530,15 @@ class RectGrid:
             self.set_dists_equal(s)
             self.set_dists_equal('%sspace' % s[0])
             self.set_dists_equal('%smargin' % s[0])
+
+            return
+
+        if dist_group=='bbox':
+            self.set_dists_equal('width')
+            self.set_dists_equal('wspace')
+
+            self.set_dists_equal('height')
+            self.set_dists_equal('hspace')
 
             return
 
@@ -1304,6 +1612,172 @@ class RectGrid:
 
         self.set_dists_val(0, s)
 
+    def set_margins_zero(self, axis='both'):
+        '''
+            set margins to parent rect zero
+
+            Parameters:
+                axis: 'x', 'y', or 'both'
+                    margins along which axis to set
+        '''
+        if axis=='both':
+            self.set_margins_zero('x')
+            self.set_margins_zero('y')
+            return
+
+        assert axis in list('xy'), \
+                "only support 'x', 'y' for axis"
+        s=dict(x='wmargin', y='hmargin')[axis]
+
+        self.set_dists_val(0, s)
+
+    def set_width(self, w):
+        '''
+            set total width
+        '''
+        self.width.set_to(w)
+
+    def set_height(self, h):
+        '''
+            set total height
+        '''
+        self.height.set_to(h)
+
+    def set_no_overlap(self, min_dist=0, inbox=True):
+        '''
+            set no overlap in grid, that means
+                width, height of all rects >= 0
+                wspaces, hspaces >= 0
+
+            if `inbox` is True, means to set grid in parent box
+                then set all margins >= 0
+        '''
+        self.set_dists_bound(min_dist, 'width', upper=False)
+        self.set_dists_bound(min_dist, 'height', upper=False)
+        self.set_dists_bound(min_dist, 'sep', upper=False)
+
+        if inbox:
+            self.set_dists_bound(min_dist, 'margin', upper=False)
+
+    def set_inbox(self, axis='both'):
+        '''
+            set all points in parent box
+        '''
+        if self._parent is None:
+            return
+
+        vs_axis=['x', 'y', 'both']
+        assert axis in vs_axis, 'ony allow `axis` in %s' % str(vs_axis)
+
+        if axis=='both':
+            self.set_inbox(axis='x')
+            self.set_inbox(axis='y')
+
+            return
+
+        points=self.get_all_points(axis)
+
+        box0=self._parent
+        p0, p1=box0.get_point(axis, 0), box0.get_point(axis, -1)
+
+        for p in points:
+            self._manager.set_dists_nonneg(p-p0, p1-p)
+
+    def set_loc_at(self, loc, axis='xy', at='parent', locing='wh'):
+        '''
+            set loc at parent/root rect
+
+            Parameters:
+                loc: 4 or 2-tuple of floats
+                    fraction at a rect
+                    
+                    (x0, y0, w, h) or (x0, y0, x1, y1)
+                        x0, y0: coordinates for left-bottom corner
+                        x1, y1: coordinates for right-top corner
+                        w, h: total width and height of grid
+
+                    or just (x0, w) or (x0, x1) for x-axis
+                    similar for y-axis
+
+                axis: 'x', 'y', 'xy'
+                    which axis to set
+
+                    if 'xy', set both
+
+                at: 'parent', 'root', 'fig', default: 'parent'
+                    specify which rect is for the `loc`
+
+                locing: 'wh' or 'xy', default: 'wh'
+                    whether `loc` is (x0, y0, w, h) or (x0, y0, x1, y1)
+        '''
+        # type check
+        vs_at=['parent', 'root', 'fig']
+        assert at in vs_at, 'ony allow `at` in %s' % str(vs_at)
+
+        vs_lc=['wh', 'xy']
+        assert locing in vs_lc, 'ony allow `locing` in %s' % str(vs_lc)
+
+        assert len(loc) in [2, 4] and \
+               all([isinstance(t, numbers.Real) for t in loc]), \
+                'only allow tuple of 2 or 4 floats as `loc`'
+
+        # locing
+        if locing=='wh':
+            loc=np.array(loc).reshape(2, -1)
+            loc[1]+=loc[0]  # x0+w, y0+h
+            loc=list(np.ravel(loc))
+
+        # relative rect
+        manager=self.get_manager()
+
+        if at=='parent':
+            prect=self.get_parent()
+        else:
+            prect=manager.rect
+
+        ## axis
+        vs_axis=['x', 'y', 'xy']
+        assert axis in vs_axis, 'ony allow `axis` in %s' % str(vs_axis)
+
+        self._set_loc_at_by_axis(loc, axis, prect)
+
+    ### auxiliary functions
+    def _set_loc_at_by_axis(self, loc, axis, rect0):
+        '''
+            set loc at `rect0` along axis
+            
+            Parameters:
+                loc: (x0, x1)
+                axis: 'x', 'y', or 'xy'
+                rect0: relative upper level rect
+        '''
+        if axis=='xy':
+            if len(loc)==2:
+                locx=locy=loc
+            else:
+                locx=(loc[0], loc[2])
+                locy=(loc[1], loc[3])
+
+            self._set_loc_at_by_axis(locx, 'x', rect0)
+            self._set_loc_at_by_axis(locy, 'y', rect0)
+
+            return
+
+        assert len(loc)==2, \
+            'only allow 2 floats for `loc` in axis %s' % axis
+        v0, v1=loc
+
+        pp0=rect0.get_point(axis, 0)
+        pp1=rect0.get_point(axis, -1)
+        pw=pp1-pp0
+
+        p0=self.get_point(axis, 0)
+        p1=self.get_point(axis, -1)
+
+        manager=self.get_manager()
+        manager._add_lncomb(p0-pp0, v0*pw)
+        manager._add_lncomb(p1-pp0, v1*pw)
+
     ## properties
     for k_ in _GROUPS_DIST:
         doc_='''
@@ -1321,6 +1795,9 @@ class RectGrid:
                     % repr(k_)),
             doc=doc_)
     del k_, doc_
+
+    width =property(lambda self: self.get_width(), doc='total width')
+    height=property(lambda self: self.get_height(), doc='total height')
 
     ## getattr, setattr: for some abbreviations
     def _is_abbr_attr(self, attr):
@@ -1712,6 +2189,14 @@ class Rect:
         s_=locals()['set_'+k_]
         locals()[k_]=property(g_, s_)
     del k_, g_, s_
+
+    ## getattr: rect.x0, rect.x1, rect.y0, rect.y1
+    def __getattr__(self, prop):
+        if prop[0] in ['x', 'y'] and prop[1:].isdigit():
+            a, i=prop[0], int(prop[1:])
+            return self.get_point(a, i)
+
+        raise AttributeError('unexpected attr: %s' % prop)
 
     # other frequently-used points
     def get_partition(self, axis, p):
@@ -2260,7 +2745,7 @@ class LineSeg1D:
     ## constraint
     def _set_to(self, d):
         '''
-            add constraint to this disk
+            add constraint to this distance
                 self = d
 
             Parameters:
@@ -2268,6 +2753,13 @@ class LineSeg1D:
                     e.g. other Point
         '''
         self._get_manager()._add_lncomb(self, d)
+
+    def _set_ineq(self, d, upper=True):
+        '''
+            set ineq for the distance
+        '''
+        self._get_manager()\
+            ._add_lncomb_ineq(self, d, upper=upper)
 
     ## evaluate
     def _eval(self):
@@ -2277,6 +2769,13 @@ class LineSeg1D:
             if not determined, return None
         '''
         return self._get_manager()._eval_lncomb(self)
+
+    def _eval_bounds(self):
+        '''
+            eval bounds
+        '''
+        return self._get_manager()\
+                   ._eval_bounds_of_lncomb(self)
 
     def _eval_ratio_to(self, d):
         '''
@@ -2323,12 +2822,46 @@ class LineSeg1D:
         '''
         self._set_to(d)
 
+    def set_bound(self, d, upper=True):
+        '''
+            set upper or lower bound
+        '''
+        self._set_ineq(d, upper=upper)
+
+    def set_le(self, d):
+        '''
+            set self<=d
+        '''
+        self.set_bound(d, upper=True)
+
+    def set_ge(self, d):
+        '''
+            set self>=d
+        '''
+        self.set_bound(d, upper=False)
+
+    def set_lim(self, lim):
+        '''
+            set lim
+        '''
+        l, u=lim
+        if l is not None:
+            self.set_ge(l)
+        if u is not None:
+            self.set_le(u)
+
     def eval(self):
         '''
             evaluate this distance
             if not determined, return None
         '''
         return self._eval()
+
+    def eval_bounds(self):
+        '''
+            eval bounds of this distance
+        '''
+        return self._eval_bounds()
 
     def eval_ratio_to(self, d):
         '''
