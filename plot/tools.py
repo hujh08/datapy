@@ -87,6 +87,24 @@ def squeeze_nested(elements, is_scalar=is_scalar_default):
 
     return result
 
+# argument check
+def confirm_arg_in(arg, valids, name=None):
+    '''
+        confirm `arg` in a valid list
+        otherwise raise ValueError
+
+        :param name: str, optional
+            name of the argument
+    '''
+    if name is None:
+        name='arg'
+    else:
+        name='`%s`' % name
+
+    if arg not in valids:
+        raise ValueError(
+            'only allow %s in %s' % (name, repr(valids)))
+
 # Unit
 Units=dict(
     inches=1,
