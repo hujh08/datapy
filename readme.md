@@ -11,6 +11,9 @@ plot data
 ## GUI
 interactively cope with data
 
+## pd
+tools to manipulate `pandas` objects
+
 # Install
 configure: `./configure  --libdir path/to/libdir`, where `libdir` path is folder to contain the package
 
