@@ -22,6 +22,42 @@ def xs_by_dict(df, axis=0, drop_level=True, **kwargs):
     levels, labels=list(zip(*kwargs.items()))
     return df.xs(labels, level=levels, axis=axis, drop_level=drop_level)
 
+# loc
+def df_loc_on_col(df, col, vals):
+    '''
+        loc df in a col
+
+        select rows with val for `col` in `vals`
+    '''
+    return df.loc[df[col].isin(vals)]
+
+# sort
+def sort_index_by_list(df, klist, **kwargs):
+    '''
+        sort index as order in given list
+    '''
+    fkey=_list_to_sortkey(klist)
+    return df.sort_index(key=fkey, **kwargs)
+
+## auxiliary functions
+def _list_to_sortkey(klist):
+    kmap={}
+    for i, t in enumerate(klist):
+        assert t not in kmap  # no duplicate
+        kmap[t]=i
+    return np.vectorize(lambda t: kmap[t])
+
+# print
+def print_df(df, reset_index=False, **kwargs):
+    '''
+        more flexible function to print df
+        use `df.to_string`
+    '''
+    if reset_index:
+        df=df.reset_index()
+
+    print(df.to_string(**kwargs))
+
 # na
 def has_na(d):
     '''
@@ -33,7 +69,7 @@ def has_na(d):
 def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
                     xkey=None, ykey=None,
                     keep_dtype=True,
-                    drop_xname=True, reset_yind=True):
+                    drop_xname=True, reset_yind=False):
     '''
         convert df, like
             xcol  ycol vcol
@@ -80,3 +116,20 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
         dftab=dftab.reset_index()
 
     return dftab
+
+# concat along index
+def concat_dfs(dfs, mcol=None, marks=None, ignore_index=True):
+    '''
+        concat dataframe with new col to mark each
+    '''
+    if markcol is not None:
+        assert len(dfs)==len(marks)
+
+        dfs_new=[]
+        for dfi, ni in zip(dfs, marks):
+            dfi=dfi.copy()
+            dfi[mcol]=ni
+            dfs_new.append(dfi)
+        dfs=dfs_new
+
+    return pd.concat(dfs, ignore_index=ignore_index)
