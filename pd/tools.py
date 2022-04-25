@@ -39,13 +39,39 @@ def sort_index_by_list(df, klist, **kwargs):
     fkey=_list_to_sortkey(klist)
     return df.sort_index(key=fkey, **kwargs)
 
+def sort_values_by_key(df, by, key=None, **kwargs):
+    '''
+        sort more flexible parameter for `key`,
+            that is dict, list
+    '''
+    return df.sort_values(by, key=_norm_sort_key(key), **kwargs)
+
 ## auxiliary functions
 def _list_to_sortkey(klist):
     kmap={}
     for i, t in enumerate(klist):
         assert t not in kmap  # no duplicate
         kmap[t]=i
-    return np.vectorize(lambda t: kmap[t])
+    maxi=len(klist)  # max index for non-specified key
+    return np.vectorize(lambda t: kmap.get(t, maxi))
+
+def _norm_sort_key(key):
+    '''
+        normalize value for `key` in `sort_values_by_key`
+    '''
+    if isinstance(key, dict):
+        fkeys={k: _norm_sort_key(v) for k, v in key.items()}
+        def sortkey_dict(s):
+            # input arg `s` is Series
+            if hasattr(s, 'name') and s.name in fkeys:
+                return fkeys[s.name](s)
+            return s
+        return sortkey_dict
+
+    if isinstance(key, list):
+        return _list_to_sortkey(key)
+
+    return key
 
 # print
 def print_df(df, reset_index=False, **kwargs):
