@@ -148,7 +148,7 @@ def concat_dfs(dfs, mcol=None, marks=None, ignore_index=True):
     '''
         concat dataframe with new col to mark each
     '''
-    if markcol is not None:
+    if mcol is not None:
         assert len(dfs)==len(marks)
 
         dfs_new=[]
