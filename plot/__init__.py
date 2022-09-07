@@ -1,6 +1,7 @@
 # module to plot data
 
 from .layout import RectManager
+from .plot import *
 
 # starting point for layout
 def init(*args, **kwargs):
