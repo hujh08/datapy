@@ -9,6 +9,43 @@ import matplotlib.lines as mlines
 
 from .transforms import yFuncTransFormFromAxes
 
+# distribution plot
+
+def plot_hist(ax, xs, bins=50, xlim=None, density=True, histtype='step', **kwargs):
+    '''
+        histogram plot
+
+        hujh-friendly kwargs
+    '''
+    return ax.hist(xs, bins=bins, density=density, histtype=histtype,
+                range=xlim, **kwargs)
+
+def plot_cumul(ax, xs, xlim=None, **kwargs):
+    '''
+        cumulative plot
+    '''
+    xs=np.asanyarray(xs)
+
+    # limit cut
+    if xlim is not None:
+        x0, x1=xlim
+
+        if x0 is not None:
+            xs=xs[xs>=x0]
+
+        if x1 is not None:
+            xs=xs[xs<=x1]
+
+    # sort
+    n=len(xs)
+    fracs=np.arange(n+1)/n
+    
+    xsorts=np.sort(xs)
+    xsorts=[xsorts[0], *xsorts]  # append zero point
+
+    # plot
+    return ax.step(xsorts, fracs, where='post', **kwargs)
+
 # decorate
 
 ## mark line
