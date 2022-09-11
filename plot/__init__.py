@@ -2,6 +2,7 @@
 
 from .layout import RectManager
 from .plot import *
+from .figax import *
 
 # starting point for layout
 def init(*args, **kwargs):

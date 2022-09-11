@@ -43,7 +43,7 @@ from matplotlib.axes import Axes
 from matplotlib import font_manager
 
 from .linear import LinearManager, LnComb
-from .tools import map_to_nested, confirm_arg_in, Units
+from .tools import map_to_nested, squeeze_nested, confirm_arg_in, Units
 from .tools_class import add_proxy_method
 from .params import params_create_axes
 
@@ -714,25 +714,31 @@ class RectManager:
         axes=self._create_axes_recur(rects, **kwargs)
 
         # share x/y-axis
-        self._set_grps_share_axis('x', sharex)
-        self._set_grps_share_axis('y', sharey)
+        self._set_grps_share_axis('x', sharex, ignore_nonexists=True)
+        self._set_grps_share_axis('y', sharey, ignore_nonexists=True)
 
         if return_fig:
             return fig, axes
         return axes
 
     ## auxiliary functions
-    def _set_grps_share_axis(self, axis, grps):
+    def _set_grps_share_axis(self, axis, grps=None, ignore_nonexists=True):
         '''
             set axis share for list of groups
         '''
         if grps is None:
             return
 
-        for grp in grps:
-            self._set_axes_share_axis(axis, grp)
+        # only one group
+        if all([isinstance(a, Rect) for a in grps]):
+            return self._set_axes_share_axis(axis, grps, ignore_nonexists=ignore_nonexists)
 
-    def _set_axes_share_axis(self, axis, rects):
+        # multiple groups
+        for grp in grps:
+            assert not isinstance(grp, Rect)
+            self._set_axes_share_axis(axis, grp, ignore_nonexists=ignore_nonexists)
+
+    def _set_axes_share_axis(self, axis, rects, ignore_nonexists=True):
         '''
             set axis share between group of rects
 
@@ -742,9 +748,17 @@ class RectManager:
         if len(rects)<2:
             return
 
-        rect0=rects[0]
-        for ri in rects[1:]:
-            ri.set_axis_share(axis, rect0)
+        rects=squeeze_nested(rects, is_scalar=lambda a: isinstance(a, Rect))
+        if ignore_nonexists:  # ignore rect while no axes exists
+            while rects and not rects[0].has_axes():
+                rects.pop(0)
+
+            if len(rects)<2:
+                return
+
+        rect0=rects.pop(0)
+        for ri in rects:
+            ri.set_axis_share(axis, rect0, ignore_nonexists=ignore_nonexists)
 
     def _create_axes_recur(self, rects, **kwargs):
         '''
@@ -796,6 +810,9 @@ class RectGrid:
         ## indices along x- and y- axis
         self._xindex=np.arange(self._nx)
         self._yindex=np.arange(self._ny)
+
+        # buffer to place created rects: indexed by (x, y, xspan, yspan)
+        self._buf_rects={}
 
         # parent rect
         if parent is not None:
@@ -999,8 +1016,22 @@ class RectGrid:
             assert isinstance(indx, numbers.Integral), \
                 'only allow integral `indy` when `yspan` set'
 
-        return Rect(self, indx=indx, indy=indy,
+        assert xspan>=1 and yspan>=1, 'only allow positive for span'
+
+        # query buffer of existed rects
+        x0, y0=self._standard_rect_xyind(indx=indx, indy=indy)
+        x1, y1=self._standard_rect_xyind(indx=x0+xspan-1, indy=y0+yspan-1)
+
+        k=(x0, y0, x1-x0+1, y1-y0+1)
+        if k in self._buf_rects:
+            return self._buf_rects[k]
+
+        # create new rect
+        rect=Rect(self, indx=indx, indy=indy,
                           xspan=xspan, yspan=yspan)
+        self._buf_rects[k]=rect
+
+        return rect
 
     def _get_ith_rect(self, i):
         '''
@@ -1092,7 +1123,7 @@ class RectGrid:
         '''
         return self._get_ith_rect(i)
 
-    def get_rects(self, arg='row', reverse=False, overlap=False):
+    def get_rects(self, arg='row', reverse=False):
         '''
             return collection of rects
 
@@ -1112,15 +1143,10 @@ class RectGrid:
                     whether reverse order of rects
 
                     only acts when arg is str
-
-                overlap: bool
-                    whether allow overlap rect in exactly same region
-
-                    if True, always create new rect even in same region
         '''
         if isinstance(arg, str):
             return self._get_rects_by_str(arg, reverse=reverse)
-        return self._get_rects_by_inds(arg, overlap=overlap)
+        return self._get_rects_by_inds(arg)
 
     ### auxiliary functions
     def _get_rects_by_str(self, s, reverse=False):
@@ -1146,24 +1172,11 @@ class RectGrid:
 
         return self._get_rects_by_inds(inds)
 
-    def _get_rects_by_inds(self, inds, overlap=False):
+    def _get_rects_by_inds(self, inds):
         '''
             fetch rects in given indices
-
-            :param overlap: bool
-                whether allow overlap rect in exactly same region
         '''
-        if overlap:
-            getitem=self.__getitem__
-        else:
-            buf={}
-            def getitem(ind):
-                a=self.__getitem__(ind)
-                k=a.get_xyind_sw(), a.get_xyspan()
-                if k not in buf:
-                    buf[k]=a
-                return buf[k]
-        return map_to_nested(getitem, inds,
+        return map_to_nested(self.__getitem__, inds,
                     is_scalar=self._is_type_item_index,
                     astype=None)
 
@@ -1607,10 +1620,47 @@ class RectGrid:
             return
 
         assert axis in list('xy'), \
-                "only support 'x', 'y' for axis"
+                "only support 'x', 'y', 'both' for axis"
         s=dict(x='wspace', y='hspace')[axis]
 
         self.set_dists_val(0, s)
+
+    def set_seps_ratio_to(self, dist0, ratios, axis='both'):
+        '''
+            set ratios of separations with respect to a base distance
+
+            Parameters:
+                dist0: LineSeg1D, RectGrid, Rect
+                    base distance
+
+                ratios: float, or array of float
+                    ratio of sep to `dist0`
+
+                axis: 'x', 'y', or 'both'
+        '''
+        if axis=='both':
+            self.set_seps_ratio_to(dist0, ratios, 'x')
+            self.set_seps_ratio_to(dist0, ratios, 'y')
+            return
+
+        assert axis in list('xy'), \
+                "only support 'x', 'y', 'both' for axis"
+
+        # dist0
+        if not isinstance(dist0, LineSeg1D):
+            assert isinstance(dist0, RectGrid) or isinstance(dist0, Rect)
+            p0, p1=[dist0.get_point(axis, i) for i in [0, -1]]
+            dist0=p1-p0
+
+        s=dict(x='wspace', y='hspace')[axis]
+        dists=getattr(self, f'get_all_{s}s')()
+
+        if isinstance(ratios, numbers.Number):
+            ratios=[ratios]*len(dists)
+        else:
+            assert len(ratios)==len(dists)
+
+        self._manager.set_dists_ratio([dist0, *dists], [1, *ratios])
 
     def set_margins_zero(self, axis='both'):
         '''
@@ -1859,7 +1909,7 @@ class RectGrid:
         '''
         if inds is None:
             inds='row'
-        rects=self.get_rects(inds, overlap=False)
+        rects=self.get_rects(inds)
 
         # omits
         if omits is None:
@@ -2464,7 +2514,7 @@ class Rect:
     axes=property(get_axes)
 
     ## x/y-axis share
-    def set_axis_share(self, axis, other):
+    def set_axis_share(self, axis, other, ignore_nonexists=False):
         '''
             set to share with other rect or Axes
 
@@ -2477,11 +2527,19 @@ class Rect:
         '''
         check_axis(axis)
 
-        assert self.has_axes(), 'axes not exists'
+        if not self.has_axes():
+            if ignore_nonexists:
+                return
+            else:
+                raise Exception('axes not exists')
         axes=self._axes
 
         if isinstance(other, Rect):
-            assert other.has_axes(), 'axes not exists in `other`'
+            if not other.has_axes():
+                if ignore_nonexists:
+                    return
+                else:
+                    raise Exception('axes not exists in `other`')
             other=other._axes
         elif not isinstance(other, Axes):
             raise TypeError('only allow type `Rect` or `Axes` for `other`')
