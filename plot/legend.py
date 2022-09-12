@@ -44,8 +44,6 @@ class ContourHandler(mhandler.HandlerBase):
 
     # create artists
     def create_artists(self, legend, orig_handle, *args):
-        print('create_artists in ContourHandler')
-        
         patch=self._create_patch(orig_handle)
         return self._handler.create_artists(legend, patch, *args)
 
