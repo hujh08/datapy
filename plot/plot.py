@@ -7,6 +7,7 @@
 import numpy as np
 import numbers
 
+import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
 from .transforms import yFuncTransFormFromAxes
@@ -16,6 +17,7 @@ from .legend import handler_nonfill, update_handler_for_contour
 
 __all__=['plot_hist', 'plot_cumul',
          'plot_2d_hist', 'plot_2d_contour', 'plot_2d_scatter',
+         'plot_2d_bins',
          'plot_2d_joint',
          'add_fcurve', 'add_line', 'add_dline']
 
@@ -210,6 +212,97 @@ def plot_2d_scatter(ax, xs, ys, s=5, **kwargs):
         scatter plot for 2d data
     '''
     return ax.scatter(xs, ys, s=s, **kwargs)
+
+def plot_2d_bins(ax, xs, ys, bins=5, binlim=None, binxoy='x',
+                    fagg='median', ferr=None,
+                    binagg='binmid', binerr=None, marker='o', **kwargs):
+    '''
+        plot aggregation in bins
+
+        Parameters:
+            bins, binlim: args for bin split
+                bins: same as `pandas.cut`
+                    int, list of scalars or IntervalIndex
+
+                binlim: [b0, b1] in which b0, b1 float or None
+                    if None, use min or max as default
+
+                    it works only when `bins` is given in int
+
+            binxoy: 'x' or 'y'
+                bin data at x or y data
+
+            fagg, ferr: args for aggregation in another data
+                fagg: func, str, e.g. 'mean', 'median'
+
+                ferr: None, func, or str e.g. 'std', 'sem'
+                    'sem': standard error of mean
+
+                    if None, not plot err
+
+            binagg, binerr: args for aggregation in bin data
+                binagg: 'binmid' or args as `fagg`
+                    if 'binmid', just use middle of bin
+
+                binerr: err agg
+                    it works only when `binagg` != 'binmid'
+
+            marker, kwargs: arguments for plot
+    '''
+    assert binxoy in ['x', 'y']
+    if binxoy=='y':
+        xs, ys=ys, xs
+
+    # split bins
+    if isinstance(bins, numbers.Number) and binlim is not None:
+        x0, x1=binlim
+        if x0 is None:
+            x0=np.min(xs)
+        if x1 is None:
+            x1=np.max(xs)
+
+        bins=np.linspace(x0, x1, bins+1)
+
+    categories=pd.cut(xs, bins=bins, ordered=True, retbins=False)
+
+    # group and aggregate
+    aggfuncs=dict(yagg=('y', fagg), cnt=('y', 'count'))
+    if ferr is not None:
+        aggfuncs.update(yerr=('y', ferr))
+
+    if binagg=='binmid':
+        df=pd.concat([ys, categories], axis=1, keys='y bin'.split())
+    else:
+        df=pd.concat([xs, ys, categories], axis=1, keys='x y bin'.split())
+
+        aggfuncs.update(xagg=('x', binagg))
+        if binerr is not None:
+            aggfuncs.update(xerr=('x', xerr))
+
+    df=df.dropna()
+
+    dataplt=df.groupby('bin').agg(**aggfuncs)
+    dataplt=dataplt[dataplt['cnt']>5]
+    dataplt.dropna()
+
+    # prepare data to plot
+    kws_plt={}
+    sx, sy='x', 'y'
+    if binxoy=='y':
+        sx, sy=sy, sx
+
+    kws_plt[sy]=dataplt['yagg']
+    if ferr is not None:
+        kws_plt[sy+'err']=dataplt['yerr']
+
+    if binagg=='binmid':
+        kws_plt[sx]=[interval.mid for interval in dataplt.index]
+    else:
+        kws_plt[sx]=dataplt['xagg']
+        if binerr is not None:
+            kws_plt[sx+'err']=dataplt['yerr']
+
+    return ax.errorbar(**kws_plt, marker=marker, **kwargs)
 
 ### mixed plotting fashion
 
