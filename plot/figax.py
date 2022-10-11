@@ -14,7 +14,8 @@ __all__ = ['get_figaxes_grid', 'get_figaxes_joint']
 
 # axes in grid
 
-def get_figaxes_grid(nrows=1, ncols=1, sharex=False, sharey=False,
+def get_figaxes_grid(nrows=1, ncols=1, figsize=None,
+                        sharex=False, sharey=False,
                         return_rects='row', return_mat=True, squeeze=True,
                         loc=[0.1, 0.8],
                         ratios_w=1, ratios_h=None,
@@ -105,6 +106,8 @@ def get_figaxes_grid(nrows=1, ncols=1, sharex=False, sharey=False,
         kwargs['sharey']=grid.get_rects(sharey)
 
     # create axes
+    if figsize is not None:
+        manager.create_figure(figsize=figsize)
     fig, axes=manager.create_axes_in_rects(rects,
                 style='tight grid', **kwargs)
 
