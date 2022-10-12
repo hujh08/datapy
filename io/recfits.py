@@ -47,8 +47,15 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
             fields_exclude: dict or set
                 fields to exclude in result
 
-            ==== determine fields of result ====
+                both previous field names are
+                    the initial names in record fits
+                which may be then renamed and 
+                                  changed to upper and lower case
+
+            ==== determine fields to ext ====
                 use `fields_ext` and `fields_exclude` in order
+
+                data would then be extracted via `record[name]`
             ====================================
 
             field_rename: dict
@@ -147,10 +154,8 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
                 use MultiIndex for column
                     if there is any multilevel column
     '''
-    dt=record.dtype
-
     # fields to extract: use `fields_ext` and `fields_exclude` in order
-    fields=dt.names
+    fields=record.dtype.names
     if fields_ext is not None:
         if isinstance(fields, dict):
             fields=[t for t in fields if t in fields_ext]
@@ -184,15 +189,6 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
     for name in fields:
         dcol=record[name]   # data of this col
 
-        # byteorder
-        if force_native:  # native order
-            dcol=to_native_byteorder(dcol)
-
-        tcol=dt[name]       # type of this col
-        suba=tcol.shape     # shape of subarray, otherwise ()
-
-        dcol=dcol.reshape(-1, *suba)
-
         # field rename: subsequent process would use new name
         if name in field_rename:
             name=field_rename[name]
@@ -200,7 +196,12 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
             assert fieldname_charcase in ['upper', 'lower']
             name=getattr(name, fieldname_charcase)()
 
+        # byteorder
+        if force_native:  # native order
+            dcol=to_native_byteorder(dcol)
+
         # data which is not subarray-type
+        suba=dcol.shape[1:]     # shape of subarray, otherwise ()
         if not suba:
             data_cols.append(dcol)
             name_cols.append(name)
@@ -257,7 +258,9 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
             
                 if np.any([t==1 for t in subls]):  # fetch out one-element tuple
                     print('warning: one-element tuple exists. to pick out it')
-                    names=[(t if (is_scalar_type(t) or len(t)!=1) else t[0]) for t in names]
+                    names=[(t if (is_scalar_type(t) or len(t)!=1)
+                              else t[0])
+                            for t in names]
 
         data_cols.extend(dcol.T)
         name_cols.extend(names)

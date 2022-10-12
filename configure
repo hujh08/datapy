@@ -64,7 +64,8 @@ install:
 EOF
 
 # subfolders
-subds=(plot)
+subds=(io plot gui pd)
+
 for subd in "${subds[@]}"
 do
     echo "cp dir: $subd ==> $libdir/$package/$subd"
@@ -77,6 +78,7 @@ echo
 
 # other tasks
 echo "task: clean"
+
 echo >>$makef
 echo "clean:">>$makef
 echo -e "\trm -rf \$(moddir)/*">>$makef
