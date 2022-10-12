@@ -207,10 +207,31 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
 
     return contours
 
-def plot_2d_scatter(ax, xs, ys, s=5, **kwargs):
+def plot_2d_scatter(ax, xs, ys, s=5, random_choice=None, **kwargs):
     '''
         scatter plot for 2d data
+
+        :param random_choice: None, or int
+            randomly choose a small subgroup to plot
+                in order to decrease file size
     '''
+    n=len(xs)
+    assert len(ys)==n
+    if random_choice is not None:
+        inds=np.arange(n)
+        inds=np.random.choice(inds, size=random_choice, replace=False)
+
+        xs=[xs[i] for i in inds]
+        ys=[ys[i] for i in inds]
+
+        if 'c' in kwargs and not isinstance(kwargs['c'], str):
+            c=kwargs['c']
+            kwargs['c']=[c[i] for i in inds]
+
+        if 's' in kwargs and not isinstance(kwargs['s'], numbers.Number):
+            s=kwargs['s']
+            kwargs['s']=[s[i] for i in inds]
+
     return ax.scatter(xs, ys, s=s, **kwargs)
 
 def plot_2d_bins(ax, xs, ys, bins=5, binlim=None, binxoy='x',
