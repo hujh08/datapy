@@ -11,8 +11,8 @@ from functools import partial
 import numpy as np
 import pandas as pd
 
-def load_rec_fits(fname, return_rec=False, **kwargs):
-    d=load_fits_data(fname)
+def load_rec_fits(fname, ext=None, return_rec=False, **kwargs):
+    d=load_fits_data(fname, ext=ext)
 
     if return_rec:   # only return record, not df
         return d
@@ -281,9 +281,9 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
     return pd.DataFrame(dict_data, columns=name_cols)
 
 ## auxilliary functions
-def load_fits_data(fname):
+def load_fits_data(fname, ext=None):
     from astropy.io import fits
-    return fits.getdata(fname)
+    return fits.getdata(fname, ext=ext)
 
 ### multilevel colnames
 def factory_tuples_multilevel_colname(**kwargs):
