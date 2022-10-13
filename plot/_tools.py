@@ -159,6 +159,10 @@ def calc_density_map_2d(xs, ys, bins=None,
     xcents=(xedges[:-1]+xedges[1:])/2
     ycents=(yedges[:-1]+yedges[1:])/2
 
+    # filter data in region
+    xs, ys=filter_by_lim(xs, ys, xlim=[xedges[0], xedges[-1]])
+    ys, xs=filter_by_lim(ys, xs, xlim=[yedges[0], yedges[-1]])
+
     # kde
     if kde:
         return _densmap_by_kde(xs, ys, xcents, ycents)
