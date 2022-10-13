@@ -10,6 +10,7 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
+from astropy.io import fits
 
 def load_rec_fits(fname, ext=None, return_rec=False, **kwargs):
     d=load_fits_data(fname, ext=ext)
@@ -282,7 +283,6 @@ def rec_to_df(record, fields_ext=None, fields_exclude=set(),
 
 ## auxilliary functions
 def load_fits_data(fname, ext=None):
-    from astropy.io import fits
     return fits.getdata(fname, ext=ext)
 
 ### multilevel colnames
@@ -416,3 +416,10 @@ def is_scalar_type(d):
         wheter type of data is scalar
     '''
     return isinstance(d, str) or isinstance(d, numbers.Number)
+
+# save to rec fits
+def save_to_rec_fits(df, fname, overwrite=True, index=False, **kwargs):
+    '''
+        save to rec fits
+    '''
+    fits.writeto(fname, df.to_records(index=False), overwrite=overwrite, **kwargs)
