@@ -159,3 +159,65 @@ def concat_dfs(dfs, mcol=None, marks=None, ignore_index=True):
         dfs=dfs_new
 
     return pd.concat(dfs, ignore_index=ignore_index)
+
+# merge multi dfs
+def merge_dfs(dfs, suffixes=None, on=None, **kwargs):
+    '''
+        merge multiply dataframes
+
+        :param suffixes: None, or list of string
+            suffixes to distinguish column
+
+            if None, use default ['_1', '_2', ..., '_n']
+    '''
+    n=len(dfs)
+    assert n>=2, 'only support merge >=2 dfs'
+
+    # suffixes
+    if suffixes is None:
+        suffixes=[f'_{i+1}' for i in range(n)]
+    else:
+        assert len(suffixes)==n
+
+    # rename columns
+    cnt_colname={}
+    for df in dfs:
+        for c in df.columns.unique():
+            if c not in cnt_colname:
+                cnt_colname[c]=0
+            cnt_colname[c]+=1
+
+    ## exclude key in `on`
+    if on is not None:
+        excludes=[]
+        if isinstance(on, str):
+            excludes=[on]
+        else:
+            excludes=on
+
+        for o in excludes:
+            if o in cnt_colname:
+                del cnt_colname[o]
+
+    ## extract duplicated columns
+    cols_dup=[s for s, v in cnt_colname.items() if v>=2]
+
+    ## rename
+    dfs1=[]
+    for df, s in zip(dfs, suffixes):
+        mapname={c: c+s for c in cols_dup}
+        dfs1.append(df.rename(columns=mapname))
+    dfs=dfs1
+
+    # merge
+    df, s=dfs[0], suffixes[0]
+    for dfi, si in zip(dfs[1:], suffixes[1:]):
+        df=df.merge(dfi, suffixes=[s, si], on=on, **kwargs)
+
+    return df
+
+def merge_dfs_on_ind(dfs, **kwargs):
+    '''
+        merge dataframes on index
+    '''
+    return merge_dfs(dfs, left_index=True, right_index=True, **kwargs)
