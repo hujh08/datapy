@@ -21,6 +21,9 @@ tools to manipulate `pandas` objects
 ## web
 toolkit to handle web tasks
 
+## path
+tools to handle path in file system
+
 # Install
 configure: `./configure  --libdir path/to/libdir`, where `libdir` path is folder to contain the package
 

@@ -64,7 +64,7 @@ install:
 EOF
 
 # subfolders
-subds=(io plot gui pd web)
+subds=(io plot gui pd web path)
 
 for subd in "${subds[@]}"
 do
