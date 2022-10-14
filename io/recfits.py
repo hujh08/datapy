@@ -418,8 +418,49 @@ def is_scalar_type(d):
     return isinstance(d, str) or isinstance(d, numbers.Number)
 
 # save to rec fits
-def save_to_rec_fits(df, fname, overwrite=True, index=False, **kwargs):
+def save_to_rec_fits(df, fname, overwrite=True, kws_fits={},
+                        index=False,
+                        column_dtypes=None, convert_str_col=True, maxstrlen=None,
+                        **kwargs):
     '''
         save to rec fits
+
+        :param column_dtypes: same as `pandas.dataframe.to_records`
+
+        :param convert_str_col: bool, default True
+            if True, create or add in given `column_dtypes` for object column
+
+            it works only when `column_dtypes` is None, or dict type
+
+        :param maxstrlen: None or int
+            if not None, max length of string in records
+
+        optional `kwargs` for `df.to_records`
     '''
-    fits.writeto(fname, df.to_records(index=False), overwrite=overwrite, **kwargs)
+    if convert_str_col and \
+      (column_dtypes is None or isinstance(column_dtypes, dict)):
+        mapdtypes={}
+        for c in df.columns:
+            d=df[c]
+            dtype=d.dtype
+            # if dtype.name=='object':
+            if issubclass(dtype.type, np.object_):
+                n=d.map(len).max()
+                if maxstrlen is not None:
+                    assert n<=maxstrlen
+
+                mapdtypes[c]=f'U{n}'
+
+        if mapdtypes:
+            if isinstance(column_dtypes, dict):
+                for k, v in column_dtypes.items():
+                    assert k not in mapdtypes, \
+                           'conflict key for object col in `column_dtypes`'
+
+                    mapdtypes[k]=v
+
+            column_dtypes=mapdtypes
+
+    rec=df.to_records(index=False, column_dtypes=column_dtypes, **kwargs)
+
+    fits.writeto(fname, rec, overwrite=overwrite, **kws_fits)
