@@ -1,5 +1,9 @@
 Suite to handle data
 
+# Motivation
+
+To collect helpful scripts used in my work.
+
 # Modules
 
 ## io
@@ -20,4 +24,4 @@ toolkit to handle web tasks
 # Install
 configure: `./configure  --libdir path/to/libdir`, where `libdir` path is folder to contain the package
 
-Then `make install`
+Then `make install` to install all modules or `make SUBMOD` for individual install.
