@@ -14,12 +14,12 @@ __all__ = ['get_figaxes_grid', 'get_figaxes_joint']
 
 # axes in grid
 
-def get_figaxes_grid(nrows=1, ncols=1, figsize=None,
+def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
                         sharex=False, sharey=False,
                         return_rects='row', return_mat=True, squeeze=True,
-                        loc=[0.1, 0.8],
                         ratios_w=1, ratios_h=None,
                         ratios_wspace=0.01, ratios_hspace=None,
+                        ratio_wh=None,
                         mat=True):
     '''
         axes in grid
@@ -28,6 +28,23 @@ def get_figaxes_grid(nrows=1, ncols=1, figsize=None,
             nrows, ncols: int
                 number of rows/cols in grid
                 ny, nx
+
+            loc: [x0, w] or [x0, y0, w, h]
+                rectangle of whole axes
+                in unit of fraction in figure
+
+                if [x0, w], means y0, h = x0, w
+
+            figsize: None, or (float, float)
+                figure size (w, h) in inches
+
+                it works only when fig not created and
+                    w, h not determined from constraints
+
+                if ratio w/h could be determined,
+                    use as large size as possible to keep the ratio
+
+                if None, use `plt.rcParams['figure.figsize']` 
 
             sharex, sharey: bool, or str {'all', 'row', 'col'}, or list of array of int
                 specify rects to share x/y-axis
@@ -47,12 +64,6 @@ def get_figaxes_grid(nrows=1, ncols=1, figsize=None,
 
                 it works only when `return_mat` works and True
 
-            loc: [x0, w] or [x0, y0, w, h]
-                rectangle of whole axes
-                in unit of fraction in figure
-
-                if [x0, w], means y0, h = x0, w
-
             ratios_w, ratios_h: float, array of float
                 ratios of width/height of rects in grid
 
@@ -64,6 +75,13 @@ def get_figaxes_grid(nrows=1, ncols=1, figsize=None,
             ratios_wspace, ratios_hsapace: float, array of float
                 ratios of wspace, hspace with respect to rect[0, 0] in left-bottom
                 similar as `ratios_w`, `ratios_h`
+
+            ratio_wh: None, float or tuple (int, float)/((int, int), float)
+                ratio w/h for one axes (if given tuple) or whole axes region
+
+                if None, not set
+                if float, set for whole region
+                if (i, r) or ((i, j), r), set 
     '''
     # create rects
     manager=RectManager()
@@ -93,6 +111,11 @@ def get_figaxes_grid(nrows=1, ncols=1, figsize=None,
     if ratios_hspace is None:
         ratios_hspace=ratios_wspace
     grid.set_seps_ratio_to(rect0.height, ratios_hspace, axis='y')
+
+    ## ratio of w/h
+    if ratio_wh is not None:
+        print('warning: to implement latter for `ratio_wh`')
+        # pass
 
     # sharex, sharey
     kwargs={}
