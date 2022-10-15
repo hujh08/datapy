@@ -76,12 +76,13 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
                 ratios of wspace, hspace with respect to rect[0, 0] in left-bottom
                 similar as `ratios_w`, `ratios_h`
 
-            ratio_wh: None, float or tuple (int, float)/((int, int), float)
-                ratio w/h for one axes (if given tuple) or whole axes region
+            ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
+                ratio w/h for one axes or whole axes region (if given (None, int))
 
                 if None, not set
-                if float, set for whole region
-                if (i, r) or ((i, j), r), set 
+                if float, set for 0th rect
+                if (i, r) or ((i, j), r), set for rect in index i or (i, j)
+                if (None, r), set for whole rect
     '''
     # create rects
     manager=RectManager()
@@ -114,8 +115,17 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
 
     ## ratio of w/h
     if ratio_wh is not None:
-        print('warning: to implement latter for `ratio_wh`')
-        # pass
+        if isinstance(ratio_wh, numbers.Number):
+            ind=0
+        else:
+            ind, ratio_wh=ratio_wh
+
+        if ind is None:
+            region=grid
+        else:
+            region=grid.get_rect(ind)
+
+        manager.set_ratio_to([region.width, region.height], [ratio_wh, 1])
 
     # sharex, sharey
     kwargs={}
@@ -135,7 +145,7 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
                 style='tight grid', **kwargs)
 
     ## to matrix
-    if return_rects in ['row', 'col'] and return_rects:
+    if return_rects in ['row', 'col'] and return_mat:
         axes=np.asarray(axes)
         if squeeze and (nrows==1 or ncols==1):
             axes=np.ravel(axes)
@@ -165,7 +175,6 @@ def get_figaxes_joint(rect=[0.1, 0.8], ratio_wh=0.1, ratio_seps=0.01):
 
             ratio_seps: float or pair of float
                 ratio of width/height of seps to 2d axes
-
     '''
     if isinstance(ratio_wh, numbers.Number):
         rw=rh=ratio_wh

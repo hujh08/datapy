@@ -1116,12 +1116,22 @@ class RectGrid:
 
     def get_rect(self, i):
         '''
-            just return ith rect
-            always create new rect
+            get a rect in Grid
 
-            rects is ordered in row-first way
+            :param i: int, or tuple (int, int)
+                index of rect ot return
+                always create new rect
+
+                if int, just return ith rect
+                    rects is ordered in row-first way
+
+                if (i, j), means rect in ith row and jth col
         '''
-        return self._get_ith_rect(i)
+        if isinstance(i, numbers.Number):
+            return self._get_ith_rect(i)
+
+        iy, ix=i
+        return self._get_rect(indx=ix, indy=iy)
 
     def get_rects(self, arg='row', reverse=False):
         '''
