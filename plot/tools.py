@@ -32,7 +32,8 @@ def colection_astype_default(t_dst, data):
 def map_to_nested(f, elements,
                      is_scalar=is_scalar_default,
                      astype=colection_astype_default,
-                     skip_none=False):
+                     skip_none=False,
+                     args=[], kwargs={}):
     '''
         map function to element in nested collection
 
@@ -51,13 +52,16 @@ def map_to_nested(f, elements,
             skip_none: bool
                 if True, skip None result
 
+            args, kwargs: list, dict
+                additional arguments for funciton `f`
+
     '''
     if is_scalar(elements):
-        return f(elements)
+        return f(elements, *args, **kwargs)
 
     result=[]
     for v in elements:
-        t=map_to_nested(f, v, is_scalar, astype, skip_none)
+        t=map_to_nested(f, v, is_scalar, astype, skip_none, args=args, kwargs=kwargs)
 
         if skip_none and t is None:
             continue

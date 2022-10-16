@@ -987,9 +987,11 @@ class RectGrid:
                    ._add_grid(nx=nx, ny=ny)
 
     # rect
-    def _get_rect(self, indx=0, indy=0, xspan=None, yspan=None):
+    def _get_rect(self, indx=0, indy=0, xspan=None, yspan=None, origin_upper=False):
         '''
             return rect with index (indx, indy)
+
+            base function to get rect
 
             Parameters:
                 indx, indy: int, slice or objects as item of ndarray
@@ -999,6 +1001,11 @@ class RectGrid:
                     span of rect in grid
                     if set to not-None value, indx (or indy) must be int
                     otherwise, just use indx/indy to locate rect
+
+                origin_upper: bool, default False
+                    whether the index is given with origin in upper
+
+                    if True, order of axes starts from upper-left corner
         '''
         if xspan is None:
             xs=self._xindex[indx]
@@ -1018,11 +1025,19 @@ class RectGrid:
 
         assert xspan>=1 and yspan>=1, 'only allow positive for span'
 
-        # query buffer of existed rects
+        # standard index
         x0, y0=self._standard_rect_xyind(indx=indx, indy=indy)
         x1, y1=self._standard_rect_xyind(indx=x0+xspan-1, indy=y0+yspan-1)
 
-        k=(x0, y0, x1-x0+1, y1-y0+1)
+        xspan, yspan=x1-x0+1, y1-y0+1
+        indx=x0
+        if origin_upper:    # use origin lower as default
+            indy=self._ny-1-y1
+        else:
+            indy=y0
+
+        # query buffer of existed rects
+        k=(indx, indy, xspan, yspan)
         if k in self._buf_rects:
             return self._buf_rects[k]
 
@@ -1033,15 +1048,20 @@ class RectGrid:
 
         return rect
 
-    def _get_ith_rect(self, i):
+    def _get_ith_rect(self, i, origin_upper=False):
         '''
             return ith rect
 
             rects is ordered in row-first way
+
+            :param origin_upper: bool, default False
+                whether the index is given with origin in upper
+
+                if True, order of axes starts from upper-left corner
         '''
         indx, indy=self._standard_rect_xyind_of_ith(i)
 
-        return self._get_rect(indx=indx, indy=indy)
+        return self._get_rect(indx=indx, indy=indy, origin_upper=origin_upper)
 
     ## index of base rect
     def _get_num_rect_along_axis(self, axis):
@@ -1114,7 +1134,7 @@ class RectGrid:
         return self._parent
     parent=property(get_parent)
 
-    def get_rect(self, i):
+    def get_rect(self, i, origin_upper=False):
         '''
             get a rect in Grid
 
@@ -1126,14 +1146,19 @@ class RectGrid:
                     rects is ordered in row-first way
 
                 if (i, j), means rect in ith row and jth col
+
+            :param origin_upper: bool, default False
+                whether the index is given with origin in upper
+
+                if True, order of axes starts from upper-left corner
         '''
         if isinstance(i, numbers.Number):
-            return self._get_ith_rect(i)
+            return self._get_ith_rect(i, origin_upper=origin_upper)
 
         iy, ix=i
-        return self._get_rect(indx=ix, indy=iy)
+        return self._get_rect(indx=ix, indy=iy, origin_upper=origin_upper)
 
-    def get_rects(self, arg='row', reverse=False):
+    def get_rects(self, arg='row', reverse=False, origin_upper=False):
         '''
             return collection of rects
 
@@ -1153,13 +1178,18 @@ class RectGrid:
                     whether reverse order of rects
 
                     only acts when arg is str
+
+                origin_upper: bool, default False
+                    whether the index is given with origin in upper
+
+                    if True, order of axes starts from upper-left corner
         '''
         if isinstance(arg, str):
-            return self._get_rects_by_str(arg, reverse=reverse)
-        return self._get_rects_by_inds(arg)
+            return self._get_rects_by_str(arg, reverse=reverse, origin_upper=origin_upper)
+        return self._get_rects_by_inds(arg, origin_upper=origin_upper)
 
     ### auxiliary functions
-    def _get_rects_by_str(self, s, reverse=False):
+    def _get_rects_by_str(self, s, reverse=False, origin_upper=False):
         '''
             real work to get rects for
                 'row', 'col', 'all'
@@ -1180,15 +1210,15 @@ class RectGrid:
         if reverse:
             inds=np.flip(inds, axis=-1)
 
-        return self._get_rects_by_inds(inds)
+        return self._get_rects_by_inds(inds, origin_upper=origin_upper)
 
-    def _get_rects_by_inds(self, inds):
+    def _get_rects_by_inds(self, inds, origin_upper=False):
         '''
             fetch rects in given indices
         '''
         return map_to_nested(self.__getitem__, inds,
                     is_scalar=self._is_type_item_index,
-                    astype=None)
+                    astype=None, kwargs=dict(origin_upper=origin_upper))
 
     ## support syntax: e.g. grid[0, 1], grid[:2, :]
     def _is_type_item_index(self, arg):
@@ -1199,7 +1229,7 @@ class RectGrid:
                isinstance(arg, slice) or \
                isinstance(arg, numbers.Number)
 
-    def __getitem__(self, prop):
+    def __getitem__(self, prop, origin_upper=False):
         '''
             return rect via self[prop]
             always create new rect
@@ -1214,7 +1244,7 @@ class RectGrid:
                 % (type(prop).__name__)
 
         if isinstance(prop, numbers.Number):
-            return self._get_ith_rect(prop)
+            return self._get_ith_rect(prop, origin_upper=origin_upper)
         elif isinstance(prop, tuple):
             if len(prop)==1:
                 prop=(prop[0], slice(None))
@@ -1226,7 +1256,7 @@ class RectGrid:
             prop=(prop, slice(None))
 
         indy, indx=prop
-        return self._get_rect(indx=indx, indy=indy)
+        return self._get_rect(indx=indx, indy=indy, origin_upper=origin_upper)
 
     # Points
     def _standard_point_index(self, axis, i):
@@ -2492,6 +2522,8 @@ class Rect:
             fig=self._get_manager().create_figure()
 
             loc=self.get_loc_in_root()
+            if any([l is None for l in loc]):
+                raise ValueError(f'rect loc indetermined: {loc}')
             axes=fig.add_axes(loc, **kwargs)
 
             self._axes=axes
