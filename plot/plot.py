@@ -11,7 +11,7 @@ import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
 from .transforms import yFuncTransFormFromAxes
-from ._tools import filter_by_lim, calc_density_map_2d, quants_to_levels
+from ._tools_plot import filter_by_lim, calc_density_map_2d, quants_to_levels
 from .colors import get_next_color_in_cycle
 from .legend import handler_nonfill, update_handler_for_contour
 

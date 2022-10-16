@@ -638,6 +638,9 @@ class LnComb:
         raise TypeError('unsupported type to convert to %s: %s'
                             % (cls.__name__, type(t).__name__))
 
+    def to_lncomb(self):
+        return self
+
     # arithmetic
     def __add__(self, p):
         '''

@@ -43,8 +43,8 @@ from matplotlib.axes import Axes
 from matplotlib import font_manager
 
 from .linear import LinearManager, LnComb
-from .tools import map_to_nested, squeeze_nested, confirm_arg_in, Units
-from .tools_class import add_proxy_method
+from ._tools_layout import map_to_nested, squeeze_nested, confirm_arg_in, Units
+from ._tools_class import add_proxy_method
 from .params import params_create_axes
 
 class RectManager:
@@ -109,7 +109,7 @@ class RectManager:
     # accept register from grid
     def _accept_grid(self, grid):
         '''
-            accept grid register
+            accept register of grid
 
             return a unique id
         '''
@@ -134,6 +134,49 @@ class RectManager:
                     ncols and nrows of grid
         '''
         return self._root_rect._add_grid(nx=nx, ny=ny)
+
+    def add_grid_in_axes(self, axes, nx=1, ny=1, replace=False):
+        '''
+            add grid to an existed axes
+
+            Parameters:
+                axes: `plt.Axes` instance
+                    existed axes to add grid in
+
+                nx, ny: int
+                    ncols, ncols of grid
+
+                replace: bool, default False
+                    whether to remove the old given `axes`
+        '''
+        assert isinstance(axes, plt.Axes),\
+               'only support `plt.Axes` to add grid in'
+
+        # figure
+        fig=axes.get_figure()
+        self.set_figure(fig)
+
+        rect_root=self.add_grid(1, 1).get_rect(0)  # add a layer
+
+        # position of axes
+        # (x0, y0), (x1, y1)=axes.transAxes.transform([[0, 0], [1, 1]])
+        # (x0, y0), (x1, y1)=fig.transFigure.inverted().transform([[x0, y0], [x1, y1]])
+        # unitx, unity=self.width, self.height
+
+        x0, y0, x1, y1=axes.bbox.extents  # position in pixel
+        unitx=unity=self.get_size_unit('px')
+
+        rect_root.x0=x0*unitx
+        rect_root.y0=y0*unity
+        rect_root.x1=x1*unitx
+        rect_root.y1=y1*unity
+
+        grid=rect_root.add_grid(nx=nx, ny=ny)
+
+        if replace:
+            axes.remove()
+
+        return grid
 
     # getter, setter for root rect
     for k_ in 'width height'.split():
@@ -613,6 +656,29 @@ class RectManager:
         if inv_dpi is None:
             return None
         return 1/inv_dpi
+
+    def set_figure(self, fig):
+        '''
+            set an exsited figure to manager
+        '''
+        assert isinstance(fig, plt.Figure),\
+               'only support set to Figure instance'
+
+        if self._fig is not None:  # already created
+            raise Exception('figure already created')
+
+        # w, h in inches
+        w, h=fig.get_figwidth(), fig.get_figheight()
+
+        self.set_width(w)
+        self.set_height(h)
+
+        # dpi
+        dpi=fig.get_dpi()
+        self.set_dpi(dpi)
+
+        # assign attr
+        self._fig=fig
 
     def create_figure(self, figsize=None, dpi=None, **kwargs):
         '''
@@ -1384,6 +1450,58 @@ class RectGrid:
         else:
             return LineSeg1D(p1, p0)
 
+    ## unit for dist
+    def get_dist_unit(self, unit, axis='x'):
+        '''
+            unit for distance
+            
+            Parameters:
+                unit: None, str, int, or object with attr `to_lncomb`
+                    unit of element in `vals`
+
+                    if None, no unit ('inches' by default)
+
+                    str: 'figure', 'prect', 'grid', 'rect', or 'pixel', 'px', ...
+                        figure: w or h of figure
+                        prect: w or h of parent rect
+                        grid: w h of grid
+                        rect: w or h of 0th (bottom-left) rect in grid
+                        others: see `RectManager.get_size_unit`
+
+                    int: ith rect in grid (count from bottom-left)
+
+                axis: 'x' or 'y'
+                    axis of distance
+        '''
+        if hasattr(unit, 'to_lncomb'):
+            return unit
+
+        s_brects=['figure', 'prect', 'grid', 'rect']  # str for base rect
+        if isinstance(unit, str):
+            if unit not in s_brects:
+                return self._get_manager().get_size_unit(unit)
+
+            if unit=='figure':
+                brect=self.get_manager().rect
+            elif unit=='prect':
+                brect=self.get_parent()
+            elif unit=='grid':
+                brect=self
+            else:
+                brect=self.get_rect(0)
+
+        else:
+            if not isinstance(unit, numbers.Integral):
+                raise TypeError('only allow str or int as unit')
+
+            brect=self.get_rect(unit)
+
+        assert axis in ['x', 'y']
+        if axis=='x':
+            return brect.width.to_lncomb()
+        else:
+            return brect.height.to_lncomb()
+
     ## get collection of same type of dist
     def get_all_widths(self):
         '''
@@ -1477,7 +1595,7 @@ class RectGrid:
 
         self._manager.set_dists_ratio(dists, ratios)
 
-    def set_dists_val(self, vals, dist_group='width'):
+    def set_dists_val(self, vals, dist_group='width', units=None):
         '''
             set value(s) for collection of dists
 
@@ -1490,16 +1608,43 @@ class RectGrid:
                 dist_group: 'width', 'height', 'wspace', 'hspace'
                            'wmargin', 'hmargin', 'margin', 'sep'
                     group of dists to set
+
+                units: None, str, int, obj with `to_lncomb`, or list of scalar
+                    str: 'figure', 'prect', 'grid', 'rect', or 'pts', 'px', ...
+                    int: ith rect in grid (count from bottom-left)
+
+                    see `get_dist_unit` for detail
         '''
         dists=self.get_dists_by_group(dist_group)
+        n=len(dists)
+
+        # values
         if not isinstance(vals, abc.Iterable):
-            vals=[vals]*len(dists)
+            vals=[vals]*n
         else:
             vals=list(vals)
-            assert len(vals)==len(dists), \
-                'cannot assign %i vals to %i dists' \
-                    % (len(vals), len(dists))
+            assert len(vals)==n, \
+                f'cannot assign {len(vals)} vals to {len(dists)} dists'
 
+        # units
+        if units is not None:
+            if isinstance(units, str) or \
+               isinstance(units, numbers.Number) or \
+               hasattr(units, 'to_lncomb'):
+                units=[units]*n
+            assert len(units)==n, \
+                f'cannot assign {len(units)} units to {len(dists)} dists'
+
+            vals1=[]
+            for di, vi, ui in zip(dists, vals, units):
+                if ui is None:
+                    vals1.append(vi)
+                    continue
+                ui=self.get_dist_unit(ui, axis=di._axis)
+                vals1.append(vi*ui)
+            vals=vals1
+
+        # set vals
         for di, vi in zip(dists, vals):
             di.set_to(vi)
 
@@ -1597,6 +1742,14 @@ class RectGrid:
 
         self.set_dists_ratio(1, dist_group)
 
+    def set_all_dists_equal(self):
+        '''
+            set all dists in same group equal
+                including width, height, wspace, hspace, wmargin, hmargin
+        '''
+        self.set_dists_equal('xy')
+
+    ## global layout
     def set_rect_sep_margin_ratio(self, ratios, axis='both'):
         '''
             ratio between size of
@@ -1646,93 +1799,6 @@ class RectGrid:
 
         self._manager.set_dists_ratio(dists, ratios)
 
-    def set_seps_zero(self, axis='both'):
-        '''
-            set separations between rect zero
-
-            Parameters:
-                axis: 'x', 'y', or 'both'
-                    separations along which axis to set
-        '''
-        if axis=='both':
-            self.set_seps_zero('x')
-            self.set_seps_zero('y')
-            return
-
-        assert axis in list('xy'), \
-                "only support 'x', 'y', 'both' for axis"
-        s=dict(x='wspace', y='hspace')[axis]
-
-        self.set_dists_val(0, s)
-
-    def set_seps_ratio_to(self, dist0, ratios, axis='both'):
-        '''
-            set ratios of separations with respect to a base distance
-
-            Parameters:
-                dist0: LineSeg1D, RectGrid, Rect
-                    base distance
-
-                ratios: float, or array of float
-                    ratio of sep to `dist0`
-
-                axis: 'x', 'y', or 'both'
-        '''
-        if axis=='both':
-            self.set_seps_ratio_to(dist0, ratios, 'x')
-            self.set_seps_ratio_to(dist0, ratios, 'y')
-            return
-
-        assert axis in list('xy'), \
-                "only support 'x', 'y', 'both' for axis"
-
-        # dist0
-        if not isinstance(dist0, LineSeg1D):
-            assert isinstance(dist0, RectGrid) or isinstance(dist0, Rect)
-            p0, p1=[dist0.get_point(axis, i) for i in [0, -1]]
-            dist0=p1-p0
-
-        s=dict(x='wspace', y='hspace')[axis]
-        dists=getattr(self, f'get_all_{s}s')()
-
-        if isinstance(ratios, numbers.Number):
-            ratios=[ratios]*len(dists)
-        else:
-            assert len(ratios)==len(dists)
-
-        self._manager.set_dists_ratio([dist0, *dists], [1, *ratios])
-
-    def set_margins_zero(self, axis='both'):
-        '''
-            set margins to parent rect zero
-
-            Parameters:
-                axis: 'x', 'y', or 'both'
-                    margins along which axis to set
-        '''
-        if axis=='both':
-            self.set_margins_zero('x')
-            self.set_margins_zero('y')
-            return
-
-        assert axis in list('xy'), \
-                "only support 'x', 'y' for axis"
-        s=dict(x='wmargin', y='hmargin')[axis]
-
-        self.set_dists_val(0, s)
-
-    def set_width(self, w):
-        '''
-            set total width
-        '''
-        self.width.set_to(w)
-
-    def set_height(self, h):
-        '''
-            set total height
-        '''
-        self.height.set_to(h)
-
     def set_no_overlap(self, min_dist=0, inbox=True):
         '''
             set no overlap in grid, that means
@@ -1772,6 +1838,161 @@ class RectGrid:
 
         for p in points:
             self._manager.set_dists_nonneg(p-p0, p1-p)
+
+    ## width/height of grid
+    def set_width(self, w):
+        '''
+            set total width
+        '''
+        self.width.set_to(w)
+
+    def set_height(self, h):
+        '''
+            set total height
+        '''
+        self.height.set_to(h)
+
+    ## widths/heights of rects
+    def set_widths_equal(self):
+        '''
+            set widths of all rects equal
+        '''
+        self.set_dists_equal(dist_group='width')
+
+    def set_heights_equal(self):
+        '''
+            set widths of all rects equal
+        '''
+        self.set_dists_equal(dist_group='height')
+
+    def set_rects_equal(self, axis='xy'):
+        '''
+            set length of rects equal along an/both axis
+        '''
+        if axis=='xy':
+            self.set_widths_equal()
+            self.set_heights_equal()
+            return
+
+        assert axis in ['x', 'y']
+        if axis=='x':
+            self.set_widths_equal()
+        else:
+            self.set_heights_equal()
+
+    ## constraint to separations
+    def set_seps(self, vals, axis='both', units=None):
+        '''
+            set separations for vals
+
+            Parameters:
+                axis: 'x', 'y', or 'both'
+                    separations along which axis to set
+
+                    if 'both', same `vals` for both x/y-axis
+
+                units: None, str, int, obj with `to_lncomb`, or list of scalar
+                    str: 'figure', 'prect', 'grid', 'rect', or 'pts', 'px', ...
+                    int: ith rect in grid (count from bottom-left)
+
+                    see `get_dist_unit` for detail
+        '''
+        if axis=='both':
+            self.set_seps(vals, 'x', units)
+            self.set_seps(vals, 'y', units)
+            return
+
+        dist_group=dict(x='wspace', y='hspace')[axis]
+
+        self.set_dists_val(vals, dist_group=dist_group, units=units)
+
+    def set_seps_zero(self, axis='both'):
+        '''
+            set separations between rect zero
+
+            Parameters:
+                axis: 'x', 'y', or 'both'
+                    separations along which axis to set
+        '''
+        self.set_seps(0, axis=axis)
+
+    def set_seps_ratio_to(self, dist0, ratios, axis='both'):
+        '''
+            set ratios of separations with respect to a base distance
+
+            Parameters:
+                dist0: LineSeg1D, RectGrid, Rect
+                    base distance
+
+                ratios: float, or array of float
+                    ratio of sep to `dist0`
+
+                axis: 'x', 'y', or 'both'
+        '''
+        if axis=='both':
+            self.set_seps_ratio_to(dist0, ratios, 'x')
+            self.set_seps_ratio_to(dist0, ratios, 'y')
+            return
+
+        assert axis in list('xy'), \
+                "only support 'x', 'y', 'both' for axis"
+
+        # dist0
+        if not isinstance(dist0, LineSeg1D):
+            assert isinstance(dist0, RectGrid) or isinstance(dist0, Rect)
+            p0, p1=[dist0.get_point(axis, i) for i in [0, -1]]
+            dist0=p1-p0
+
+        s=dict(x='wspace', y='hspace')[axis]
+        dists=getattr(self, f'get_all_{s}s')()
+
+        if isinstance(ratios, numbers.Number):
+            ratios=[ratios]*len(dists)
+        else:
+            assert len(ratios)==len(dists)
+
+        self._manager.set_dists_ratio([dist0, *dists], [1, *ratios])
+
+    ## margins
+    def set_margins(self, vals, axis='both', units=None):
+        '''
+            set margins for vals
+
+            Parameters:
+                axis: 'x', 'y', or 'both'
+                    margins along which axis to set
+
+                    if 'both', same `vals` for both x/y-axis
+
+                units: None, str, int, obj with `to_lncomb`, or list of scalar
+                    str: 'figure', 'prect', 'grid', 'rect', or 'pts', 'px', ...
+                    int: ith rect in grid (count from bottom-left)
+
+                    see `get_dist_unit` for detail
+        '''
+        if axis=='both':
+            self.set_margins(vals, 'x', units)
+            self.set_margins(vals, 'y', units)
+            return
+
+        dist_group=dict(x='wmargin', y='hmargin')[axis]
+        self.set_dists_val(vals, dist_group=dist_group, units=units)
+
+    def set_margins_zero(self, axis='both'):
+        '''
+            set margins to parent rect zero
+
+            Parameters:
+                axis: 'x', 'y', or 'both'
+                    margins along which axis to set
+        '''
+        self.set_margins(0, axis=axis)
+
+    def set_grid_center(self):
+        '''
+            set grid locating in center of parent rect
+        '''
+        self.set_dists_equal(dist_group='margin')
 
     def set_loc_at(self, loc, axis='xy', at='parent', locing='wh'):
         '''
@@ -2280,13 +2501,23 @@ class Rect:
         locals()[k_]=property(g_, s_)
     del k_, g_, s_
 
-    ## getattr: rect.x0, rect.x1, rect.y0, rect.y1
+    # x0, x1=left, right
+    # y0, y1=bottom, top
+
+    ## getattr/setattr: rect.x0, rect.x1, rect.y0, rect.y1
     def __getattr__(self, prop):
         if prop[0] in ['x', 'y'] and prop[1:].isdigit():
             a, i=prop[0], int(prop[1:])
             return self.get_point(a, i)
 
         raise AttributeError('unexpected attr: %s' % prop)
+
+    def __setattr__(self, prop, val):
+        if prop[0] in ['x', 'y'] and prop[1:].isdigit():
+            p=self.__getattr__(prop)
+            return self._get_manager()._add_lncomb(p, val)
+
+        return super().__setattr__(prop, val)
 
     # other frequently-used points
     def get_partition(self, axis, p):
@@ -2783,6 +3014,7 @@ class LineSeg1D:
 
         self._p0=p0
         self._p1=p1
+        self._axis=p0._axis
 
     # manager
     def _get_manager(self):

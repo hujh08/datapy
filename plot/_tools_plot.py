@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 '''
-    frequently-used functions in the lib
+    useful functions for plot task
 '''
 
 import numbers

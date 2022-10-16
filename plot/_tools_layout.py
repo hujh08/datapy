@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 '''
-    useful tools for plot task
+    useful tools for layout task
 '''
 
 from collections import abc
