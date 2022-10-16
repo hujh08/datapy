@@ -77,7 +77,7 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
                 if `ratios_h == None`, use `ratios_h = ratios_w`
 
             ratios_wspace, ratios_hsapace: float, array of float
-                ratios of wspace, hspace with respect to rect[0, 0] in left-bottom
+                ratios of wspace, hspace with respect to origin rect
                 similar as `ratios_w`, `ratios_h`
 
             ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
@@ -96,43 +96,10 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
     rects=grid.get_rects(rects, origin_upper=origin_upper)
 
     # constraints
-
-    ## location of grid
-    if len(loc)==2:
-        x0, w=y0, h=loc
-    else:
-        x0, y0, w, h=loc
-    grid.set_loc_at([x0, y0, w, h], locing='wh')
-
-    ## ratio of widths/heights with respect to axes[0, 0] at left-bottom
-    grid.set_dists_ratio(ratios_w, 'width')
-
-    if ratios_h is None:
-        ratios_h=ratios_w
-    grid.set_dists_ratio(ratios_h, 'height')
-
-    ## ratio of wspace/hspace with respect to axes[0, 0]
-    rect0=grid[0, 0]
-    grid.set_seps_ratio_to(rect0.width, ratios_wspace, axis='x')
-
-    if ratios_hspace is None:
-        ratios_hspace=ratios_wspace
-    grid.set_seps_ratio_to(rect0.height, ratios_hspace, axis='y')
-
-    ## ratio of w/h
-    if ratio_wh is not None:
-        if isinstance(ratio_wh, numbers.Number):
-            ind=0
-        else:
-            ind, ratio_wh=ratio_wh
-
-        if ind is None:
-            region=grid
-        else:
-            region=grid.get_rect(ind)
-
-        manager.set_ratio_to([region.width, region.height], [ratio_wh, 1])
-
+    grid.set_grid_ratios(loc=loc, origin_upper=origin_upper,
+                            ratios_w=ratios_w, ratios_h=ratios_h,
+                            ratios_wspace=ratios_wspace, ratios_hspace=ratios_hspace,
+                            ratio_wh=ratio_wh)
     # sharex, sharey
     kwargs={}
     if sharex:
@@ -218,3 +185,10 @@ def get_figaxes_joint(loc=[0.1, 0.8], ratio_w=0.1, ratio_h=None, ratio_wh=None,
     axy.tick_params(labelbottom=False, bottom=False, top=False, right=False)
 
     return fig, (ax, axx, axy)
+
+## create subplots in existed axes
+def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], **kwargs):
+    '''
+        create subplots in existed axis
+    '''
+    pass

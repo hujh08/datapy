@@ -1503,31 +1503,38 @@ class RectGrid:
             return brect.height.to_lncomb()
 
     ## get collection of same type of dist
-    def get_all_widths(self):
+    def get_all_widths(self, origin_upper=False):
         '''
             return list of widths of columns
         '''
         return [self.get_width(i) for i in range(self._nx)]
 
-    def get_all_heights(self):
+    def get_all_heights(self, origin_upper=False):
         '''
             return list of heights of rows
         '''
-        return [self.get_height(i) for i in range(self._ny)]
+        heights=[self.get_height(i) for i in range(self._ny)]
+        if origin_upper:
+            heights=heights[::-1]
 
-    def get_all_wspaces(self):
+        return heights
+
+    def get_all_wspaces(self, origin_upper=False):
         '''
             return list of spaces between columns
         '''
         return [self.get_wspace(i) for i in range(self._nx-1)]
 
-    def get_all_hspaces(self):
+    def get_all_hspaces(self, origin_upper=False):
         '''
             return list of spaces between rows
         '''
-        return [self.get_hspace(i) for i in range(self._ny-1)]
+        hspaces=[self.get_hspace(i) for i in range(self._ny-1)]
+        if origin_upper:
+            hspaces=hspaces[::-1]
+        return hspaces
 
-    def get_all_wmargins(self):
+    def get_all_wmargins(self, origin_upper=False):
         '''
             return list of margins along x-axis
         '''
@@ -1535,18 +1542,21 @@ class RectGrid:
             return []
         return [self.get_margin('x', i) for i in range(2)]
 
-    def get_all_hmargins(self):
+    def get_all_hmargins(self, origin_upper=False):
         '''
             return list of margins along x-axis
         '''
         if self._parent is None:
             return []
-        return [self.get_margin('y', i) for i in range(2)]
+        hmargins=[self.get_margin('y', i) for i in range(2)]
+        if origin_upper:
+            hmargins=hmargins[::-1]
+        return hmargins
 
     ## get collection of dists in group
     _GROUPS_DIST=['width',   'height', 'wspace',  'hspace', 
                  'wmargin', 'hmargin', 'margin', 'sep']
-    def get_dists_by_group(self, group='width'):
+    def get_dists_by_group(self, group='width', origin_upper=False):
         '''
             get group of dists
 
@@ -1562,19 +1572,19 @@ class RectGrid:
                 'but got [%s]' % (str(self._GROUPS_DIST), group)
 
         if group=='margin':
-            d0=self.get_dists_by_group('wmargin')
-            d1=self.get_dists_by_group('hmargin')
+            d0=self.get_dists_by_group('wmargin', origin_upper=origin_upper)
+            d1=self.get_dists_by_group('hmargin', origin_upper=origin_upper)
             return [*d0, *d1]
 
         if group=='sep':
-            d0=self.get_dists_by_group('wspace')
-            d1=self.get_dists_by_group('hspace')
+            d0=self.get_dists_by_group('wspace', origin_upper=origin_upper)
+            d1=self.get_dists_by_group('hspace', origin_upper=origin_upper)
             return [*d0, *d1]
 
-        return getattr(self, 'get_all_%ss' % group)()
+        return getattr(self, 'get_all_%ss' % group)(origin_upper=origin_upper)
 
     # set linear constraints
-    def set_dists_ratio(self, ratios, dist_group='width'):
+    def set_dists_ratio(self, ratios, dist_group='width', origin_upper=False):
         '''
             set ratio for collection of dists
 
@@ -1589,13 +1599,13 @@ class RectGrid:
                            'wmargin', 'hmargin', 'margin', 'sep'
                     group of dists to set
         '''
-        dists=self.get_dists_by_group(dist_group)
+        dists=self.get_dists_by_group(dist_group, origin_upper=origin_upper)
         if len(dists)<=1:
             return
 
         self._manager.set_dists_ratio(dists, ratios)
 
-    def set_dists_val(self, vals, dist_group='width', units=None):
+    def set_dists_val(self, vals, dist_group='width', units=None, origin_upper=False):
         '''
             set value(s) for collection of dists
 
@@ -1615,7 +1625,7 @@ class RectGrid:
 
                     see `get_dist_unit` for detail
         '''
-        dists=self.get_dists_by_group(dist_group)
+        dists=self.get_dists_by_group(dist_group, origin_upper=origin_upper)
         n=len(dists)
 
         # values
@@ -1648,14 +1658,14 @@ class RectGrid:
         for di, vi in zip(dists, vals):
             di.set_to(vi)
 
-    def set_dists_bound(self, val, dist_group='sep', upper=True):
+    def set_dists_bound(self, val, dist_group='sep', upper=True, origin_upper=False):
         '''
             set dists' bound
         '''
-        dists=self.get_dists_by_group(dist_group)
+        dists=self.get_dists_by_group(dist_group, origin_upper=origin_upper)
         self._manager.set_dists_bound(val, *dists, upper=upper)
 
-    def set_dists_le(self, maxd, dist_group='width'):
+    def set_dists_le(self, maxd, dist_group='width', origin_upper=False):
         '''
             set group of dists less-or-equal to val
 
@@ -1665,9 +1675,9 @@ class RectGrid:
                     'wmargin', 'hmargin', 'margin', 'sep'
                 see `get_dists_by_group` for detail
         '''
-        self.set_dists_bound(maxd, dist_group, upper=True)
+        self.set_dists_bound(maxd, dist_group, upper=True, origin_upper=origin_upper)
 
-    def set_dists_ge(self, mind, dist_group='sep'):
+    def set_dists_ge(self, mind, dist_group='sep', origin_upper=False):
         '''
             set group of dists greater-or-equal to val
             usually used to set not too small separation
@@ -1678,9 +1688,9 @@ class RectGrid:
                     'wmargin', 'hmargin', 'margin', 'sep'
                 see `get_dists_by_group` for detail
         '''
-        self.set_dists_bound(mind, dist_group, upper=False)
+        self.set_dists_bound(mind, dist_group, upper=False, origin_upper=origin_upper)
 
-    def set_dists_lim(self, lim, dist_group='sep'):
+    def set_dists_lim(self, lim, dist_group='sep', origin_upper=False):
         '''
             set lim for group of dists 
 
@@ -1690,7 +1700,7 @@ class RectGrid:
                     'wmargin', 'hmargin', 'margin', 'sep'
                 see `get_dists_by_group` for detail
         '''
-        dists=self.get_dists_by_group(dist_group)
+        dists=self.get_dists_by_group(dist_group, origin_upper=origin_upper)
         self._manager.set_dists_lim(lim, *dists, upper=upper)
 
     def set_dists_equal(self, dist_group='bbox'):
@@ -1750,7 +1760,7 @@ class RectGrid:
         self.set_dists_equal('xy')
 
     ## global layout
-    def set_rect_sep_margin_ratio(self, ratios, axis='both'):
+    def set_rect_sep_margin_ratio(self, ratios, axis='both', origin_upper=False):
         '''
             ratio between size of
                     base rect,
@@ -1774,8 +1784,8 @@ class RectGrid:
                     if 'both', set same ratios to both axis
         '''
         if axis in ['both', 'xy']:
-            self.set_rect_sep_margin_ratio(ratios, 'x')
-            self.set_rect_sep_margin_ratio(ratios, 'y')
+            self.set_rect_sep_margin_ratio(ratios, 'x', origin_upper=origin_upper)
+            self.set_rect_sep_margin_ratio(ratios, 'y', origin_upper=origin_upper)
             return
 
         assert axis in list('xy'), \
@@ -1784,13 +1794,16 @@ class RectGrid:
         # dists
         s=dict(x='width', y='height')[axis]
 
-        dists=[getattr(self, 'get_'+s)(0)]
+        if axis=='y':
+            ind=-1 if origin_upper else 0
+
+        dists=[getattr(self, 'get_'+s)(ind)]
 
         n=getattr(self, '_n'+axis)
         if n>1:
-            dists.append(getattr(self, 'get_%sspace' % s[0])(0))
+            dists.append(getattr(self, f'get_{s[0]}space')(ind))
 
-        dists.append(self.get_margin(axis, 0))
+        dists.append(self.get_margin(axis, ind))
 
         # ratios
         ratios=list(_parse_ratios(ratios, 3))
@@ -1881,7 +1894,7 @@ class RectGrid:
             self.set_heights_equal()
 
     ## constraint to separations
-    def set_seps(self, vals, axis='both', units=None):
+    def set_seps(self, vals, axis='both', units=None, origin_upper=False):
         '''
             set separations for vals
 
@@ -1904,7 +1917,7 @@ class RectGrid:
 
         dist_group=dict(x='wspace', y='hspace')[axis]
 
-        self.set_dists_val(vals, dist_group=dist_group, units=units)
+        self.set_dists_val(vals, dist_group=dist_group, units=units, origin_upper=origin_upper)
 
     def set_seps_zero(self, axis='both'):
         '''
@@ -1916,7 +1929,7 @@ class RectGrid:
         '''
         self.set_seps(0, axis=axis)
 
-    def set_seps_ratio_to(self, dist0, ratios, axis='both'):
+    def set_seps_ratio_to(self, dist0, ratios, axis='both', origin_upper=False):
         '''
             set ratios of separations with respect to a base distance
 
@@ -1930,8 +1943,8 @@ class RectGrid:
                 axis: 'x', 'y', or 'both'
         '''
         if axis=='both':
-            self.set_seps_ratio_to(dist0, ratios, 'x')
-            self.set_seps_ratio_to(dist0, ratios, 'y')
+            self.set_seps_ratio_to(dist0, ratios, 'x', origin_upper=origin_upper)
+            self.set_seps_ratio_to(dist0, ratios, 'y', origin_upper=origin_upper)
             return
 
         assert axis in list('xy'), \
@@ -1944,7 +1957,7 @@ class RectGrid:
             dist0=p1-p0
 
         s=dict(x='wspace', y='hspace')[axis]
-        dists=getattr(self, f'get_all_{s}s')()
+        dists=getattr(self, f'get_all_{s}s')(origin_upper=origin_upper)
 
         if isinstance(ratios, numbers.Number):
             ratios=[ratios]*len(dists)
@@ -1954,7 +1967,7 @@ class RectGrid:
         self._manager.set_dists_ratio([dist0, *dists], [1, *ratios])
 
     ## margins
-    def set_margins(self, vals, axis='both', units=None):
+    def set_margins(self, vals, axis='both', units=None, origin_upper=False):
         '''
             set margins for vals
 
@@ -1976,7 +1989,7 @@ class RectGrid:
             return
 
         dist_group=dict(x='wmargin', y='hmargin')[axis]
-        self.set_dists_val(vals, dist_group=dist_group, units=units)
+        self.set_dists_val(vals, dist_group=dist_group, units=units, origin_upper=origin_upper)
 
     def set_margins_zero(self, axis='both'):
         '''
@@ -2088,6 +2101,87 @@ class RectGrid:
         manager=self.get_manager()
         manager._add_lncomb(p0-pp0, v0*pw)
         manager._add_lncomb(p1-pp0, v1*pw)
+
+    ## set all dists ratios
+    def set_grid_ratios(self, loc=[0.1, 0.8], origin_upper=False,
+                            ratios_w=1, ratios_h=None,
+                            ratios_wspace=0.01, ratios_hspace=None,
+                            ratio_wh=None):
+        '''
+            set all dists ratios in grid
+
+            after those setting, rects of grid should be fixed relative to parent rect
+
+            Parameters:
+                loc: [x0, w] or [x0, y0, w, h]
+                    rectangle of whole axes
+                    in unit of fraction in figure
+
+                    if [x0, w], means y0, h = x0, w
+
+                origin_upper: bool, default False
+                    whether the index is given with origin in upper
+
+                    if True, order of axes starts from upper-left corner
+
+
+                ratios_w, ratios_h: float, array of float
+                    ratios of width/height of rects in grid
+
+                    if float, or `len(ratios_w, or ratios_h) == nx-1 (or ny-1)`
+                        it means ratios with respect to rect[0, 0] in left-bottom
+
+                    if `ratios_h == None`, use `ratios_h = ratios_w`
+
+                ratios_wspace, ratios_hsapace: float, array of float
+                    ratios of wspace, hspace with respect to origin rect
+                    similar as `ratios_w`, `ratios_h`
+
+                ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
+                    ratio w/h for one axes or whole axes region (if given (None, int))
+
+                    if None, not set
+                    if float, set for 0th rect
+                    if (i, r) or ((i, j), r), set for rect in index i or (i, j)
+                    if (None, r), set for whole rect
+        '''
+        # location of grid
+        if len(loc)==2:
+            x0, w=y0, h=loc
+        else:
+            x0, y0, w, h=loc
+        self.set_loc_at([x0, y0, w, h], locing='wh')
+    
+        # ratio of widths/heights with respect to axes[0, 0] at left-bottom
+        self.set_dists_ratio(ratios_w, 'width', origin_upper=origin_upper)
+    
+        if ratios_h is None:
+            ratios_h=ratios_w
+        self.set_dists_ratio(ratios_h, 'height', origin_upper=origin_upper)
+    
+        ## ratio of wspace/hspace with respect to axes[0, 0]
+        rect0=self[-1, 0] if origin_upper else self[0, 0]
+        self.set_seps_ratio_to(rect0.width, ratios_wspace, axis='x', origin_upper=origin_upper)
+    
+        if ratios_hspace is None:
+            ratios_hspace=ratios_wspace
+        self.set_seps_ratio_to(rect0.height, ratios_hspace, axis='y', origin_upper=origin_upper)
+    
+        ## ratio of w/h
+        if ratio_wh is not None:
+            if isinstance(ratio_wh, numbers.Number):
+                ind=(-1, 0) if origin_upper else (0, 0)
+            else:
+                ind, ratio_wh=ratio_wh
+    
+            if ind is None:
+                region=self
+            else:
+                region=self.get_rect(ind)
+    
+            manager=self._get_manager()
+            manager.set_ratio_to([region.width, region.height], [ratio_wh, 1])
+    
 
     ## properties
     for k_ in _GROUPS_DIST:
