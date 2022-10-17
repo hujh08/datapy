@@ -12,7 +12,6 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap
 
 # color cycle
-
 def get_next_color_in_cycle(ax):
     '''
         get next color in color cycle of an axes
@@ -23,8 +22,38 @@ def get_next_color_in_cycle(ax):
 
     return color
 
-# color map
+def get_color_cycler(*colors):
+    '''
+        get color cycler
 
+        Use it like:
+            cyc=get_color_cycler(*'rgb')
+            for data, c in zip(datas, cyc):
+                plt.plot(*data, ..., color=c)
+
+        OR
+            itercyc=iter(cyc)
+            c=next(itercyc)
+            plt.plot(..., color=c)
+
+        Unlike `plt.cycler`, which should be used like
+            cyc=plt.cycler(color='rgb')
+            for data, t in zip(datas, cyc()):  # must call it for infinite cycle
+                plt.plot(*data, ..., color=t['color'])
+        For more complicated style, not just color
+            `plt.cycler` is better choice
+
+        if no colors given, use `plt.rcParams['axes.prop_cycle']`
+    '''
+    import itertools
+
+    if len(colors)==0:
+        prop_cycle=plt.rcParams['axes.prop_cycle']
+        colors=prop_cycle.by_key()['color']
+
+    return itertools.cycle(colors)
+
+# color map
 def cmap_from_anchors(rs, gs, bs, alphas=None,
                         rinds=None, ginds=None, binds=None, ainds=None,
                         name='_cmap_from_anchors', **kwargs):
