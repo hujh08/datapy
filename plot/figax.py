@@ -10,7 +10,8 @@ import numpy as np
 
 from .layout import RectManager
 
-__all__ = ['get_figaxes_grid', 'get_figaxes_joint']
+__all__ = ['get_figaxes_grid', 'get_figaxes_joint', 'get_figaxes_in_axes',
+           'get_figaxes_residual']
 
 # axes in grid
 def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
@@ -19,7 +20,7 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
                         return_mat=True, squeeze=True,
                         ratios_w=1, ratios_h=None,
                         ratios_wspace=0.01, ratios_hspace=None,
-                        ratio_wh=None):
+                        ratio_wh=None, style='tight grid'):
     '''
         axes in grid
 
@@ -92,40 +93,19 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], figsize=None,
     manager=RectManager()
     grid=manager.add_grid(nx=ncols, ny=nrows)
 
-    isarr_rects=rects in ['row', 'col']  # rects could be arranged in array
-    rects=grid.get_rects(rects, origin_upper=origin_upper)
-
     # constraints
     grid.set_grid_ratios(loc=loc, origin_upper=origin_upper,
                             ratios_w=ratios_w, ratios_h=ratios_h,
                             ratios_wspace=ratios_wspace, ratios_hspace=ratios_hspace,
                             ratio_wh=ratio_wh)
-    # sharex, sharey
-    kwargs={}
-    if sharex:
-        if type(sharex) is bool:
-            sharex='all'
-        kwargs['sharex']=grid.get_rects(sharex)
-    if sharey:
-        if type(sharey) is bool:
-            sharey='all'
-        kwargs['sharey']=grid.get_rects(sharey)
 
     # create axes
     if figsize is not None:
         manager.create_figure(figsize=figsize)
-    fig, axes=manager.create_axes_in_rects(rects,
-                style='tight grid', **kwargs)
 
-    ## to matrix
-    if isarr_rects and return_mat:
-        axes=np.asarray(axes)
-        if squeeze and (nrows==1 or ncols==1):
-            axes=np.ravel(axes)
-            if len(axes)==1:
-                axes=axes[0]
-
-    return fig, axes
+    return grid.create_axes(rects=rects, origin_upper=origin_upper,
+                                sharex=sharex, sharey=sharey,
+                                return_mat=return_mat, squeeze=squeeze, style=style)
 
 ## for joint plot
 def get_figaxes_joint(loc=[0.1, 0.8], ratio_w=0.1, ratio_h=None, ratio_wh=None,
@@ -186,9 +166,88 @@ def get_figaxes_joint(loc=[0.1, 0.8], ratio_w=0.1, ratio_h=None, ratio_wh=None,
 
     return fig, (ax, axx, axy)
 
+## for residual plot
+def get_figaxes_residual(ncols=1, loc=[0.1, 0.8],
+                                ratios_w=1, ratio_h=0.5, ratio_wh=None,
+                                ratios_wspace=0.01, ratio_hspace=0.01,
+                                sharex='col', sharey='row',
+                                **kwargs):
+    '''
+        axes for residual plot of 2d data
+            return [[ax, axr]]
+                ax: axes for 2d
+                axr: for residual plot
+
+        Parameters:
+            loc: [x0, w] or [x0, y0, w, h]
+                rectangle of whole axes
+                in unit of fraction in figure
+
+                if [x0, w], means y0, h = x0, w
+
+            ratios_w, ratio_h: array of float, float respectively
+                ratio of width for to 2d axes
+
+                if ratio_h is None, use ratio_w
+
+            ratio_wh: None or float
+                ratio w/h for 2d axes
+            
+            ratios_wspace, ratio_hspace: array of float, float respectively
+                ratio of width/height of seps to 2d axes
+
+        optional kwargs:
+            pass to `get_figaxes_grid` except
+                sharex, sharey, origin_upper
+                    (fix to 'col', 'row', False)
+    '''
+    fig, axes=get_figaxes_grid(nrows=2, ncols=ncols, loc=loc, origin_upper=True,
+                            ratios_w=ratios_w, ratios_h=[1, ratio_h],
+                            ratio_wh=ratio_wh,
+                            ratios_wspace=ratios_wspace, ratios_hspace=ratio_hspace,
+                            rects='col',
+                            sharex=sharex, sharey=sharey, **kwargs)
+
+    return fig, axes
+
 ## create subplots in existed axes
-def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], **kwargs):
+def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], replace=False,
+                            rects='row', origin_upper=False,
+                            sharex=False, sharey=False,
+                            return_mat=True, squeeze=True, style='tight grid',
+                            **kwargs):
     '''
         create subplots in existed axis
+
+        :param loc: location in axes
+
+        :param replace: bool, default False
+            whether to remove the old given `axes`
+
+        other optional kwargs:
+            used for ratios in grid
+            same as `get_figaxes_grid`
+
+            including (with default):
+                ratios_w=1,
+                ratios_h=None,
+                ratios_wspace=0.01,
+                ratios_hspace=None,
+                ratio_wh=None
     '''
-    pass
+    # create rects
+    manager=RectManager()
+    grid=manager.add_grid_in_axes(axes, nx=ncols, ny=nrows)
+
+    # constraints
+    grid.set_grid_ratios(loc=loc, origin_upper=origin_upper, **kwargs)
+
+    # create axes
+    _, axes1=grid.create_axes(rects=rects, origin_upper=origin_upper,
+                                sharex=sharex, sharey=sharey,
+                                return_mat=return_mat, squeeze=squeeze, style=style)
+
+    if replace:
+        axes.remove()
+
+    return axes1

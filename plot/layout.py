@@ -135,7 +135,7 @@ class RectManager:
         '''
         return self._root_rect._add_grid(nx=nx, ny=ny)
 
-    def add_grid_in_axes(self, axes, nx=1, ny=1, replace=False):
+    def add_grid_in_axes(self, axes, nx=1, ny=1):
         '''
             add grid to an existed axes
 
@@ -145,9 +145,6 @@ class RectManager:
 
                 nx, ny: int
                     ncols, ncols of grid
-
-                replace: bool, default False
-                    whether to remove the old given `axes`
         '''
         assert isinstance(axes, plt.Axes),\
                'only support `plt.Axes` to add grid in'
@@ -172,9 +169,6 @@ class RectManager:
         rect_root.y1=y1*unity
 
         grid=rect_root.add_grid(nx=nx, ny=ny)
-
-        if replace:
-            axes.remove()
 
         return grid
 
@@ -2242,94 +2236,64 @@ class RectGrid:
         super().__setattr__(prop, val)
 
     # create axes
-    def create_axes(self, inds=None,
-                          sharex=False, sharey=False,
-                          omits=None, return_fig=False, **kwargs):
+    def create_axes(self, rects='row', origin_upper=False,
+                            sharex=False, sharey=False,
+                            return_mat=True, squeeze=True, **kwargs):
         '''
             create axes in grid
 
             Parameters:
-                inds: None, or arg to `get_rects`
-                    if None, use `row`
-
-                sharex, sharey: same type as `matplotlib.pyplot.subplots` or
-                                list of collection of indices
-                    axes to share x/y-axis
-
-                omits: list of index
-                    order of rects to omit, no axes to create
-
-                return_fig: bool
-                    whether return fig, axes or just axes
+                rects: str {'all', 'row', 'col'}, or collections of int
+                    specify in which rects to create axes
+    
+                    axes returned would be same nested structure
+    
+                origin_upper: bool, default False
+                    whether the index is given with origin in upper
+    
+                    if True, order of axes starts from upper-left corner
+    
+                sharex, sharey: bool, or str {'all', 'row', 'col'}, or list of array of int
+                    specify rects to share x/y-axis
+    
+                return_mat: bool, default: True
+                    whether to return result as a matrix, with type np.ndarray
+    
+                    it works only when `rects` in {'row', 'col'}
+    
+                squeeze: bool, default: True
+                    whether to squeeze array if `nrows==1` or `ncols==1`
+    
+                    it works only when `return_mat` works and True
         '''
-        if inds is None:
-            inds='row'
-        rects=self.get_rects(inds)
 
-        # omits
-        if omits is None:
-            orders_omit=set()
-        else:
-            orders_omit=set([a.order for a in self.get_rects(omits)])
-
-        # skip omits and construct map {order: rect}
-        map_rects={}
-        def get_notomit_to_map(a):
-            i=a.order
-            if i in orders_omit:
-                return None
-            map_rects[i]=a
-            return a
-
-        rects=map_to_nested(get_notomit_to_map, rects,
-            is_scalar=lambda a: isinstance(a, Rect),
-            skip_none=True)
+        isarr_rects=rects in ['row', 'col']  # rects could be arranged in array
+        rects=self.get_rects(rects, origin_upper=origin_upper)
 
         # sharex, sharey
-        sharex=self._rects_for_axis_share(sharex, map_rects)
-        sharey=self._rects_for_axis_share(sharey, map_rects)
-
+        kws1={}
+        if sharex:
+            if type(sharex) is bool:
+                sharex='all'
+            kws1['sharex']=self.get_rects(sharex)
+        if sharey:
+            if type(sharey) is bool:
+                sharey='all'
+            kws1['sharey']=self.get_rects(sharey)
+    
         # create axes
-        return self._manager.create_axes_in_rects(rects,
-                            sharex=sharex, sharey=sharey,
-                            return_fig=return_fig, **kwargs)
-
-    def _rects_for_axis_share(self, arg, map_rects):
-        '''
-            return list of rects collection for axis share
-
-            Parameters:
-                arg: arg for axis share
-                    2 types:
-                        - same as `matplotlib.pyplot.subplots`
-                        - args passed to `get_rects`
-
-                map_rects: dict {order: rects}
-        '''
-        if arg is None:
-            return None
-
-        if isinstance(arg, bool):
-            arg='all' if arg else 'none'
-
-        if arg=='none':
-            return None
-
-        rects=self.get_rects(arg)
-        if not rects:
-            return None
-
-        # for squeeze array, like arg='all'
-        if isinstance(rects[0], Rect):
-            rects=[rects]
-
-        def get_rect_from_map(a):
-            i=a.order
-            return map_rects.get(i, None)
-
-        return map_to_nested(get_rect_from_map, rects,
-            is_scalar=lambda a: isinstance(a, Rect),
-            skip_none=True)
+        manager=self._get_manager()
+        fig, axes=manager.create_axes_in_rects(rects, **kws1, **kwargs)
+    
+        ## to matrix
+        if isarr_rects and return_mat:
+            axes=np.asarray(axes)
+            if squeeze and (self._nx==1 or self._ny==1):
+                axes=np.ravel(axes)
+                if len(axes)==1:
+                    axes=axes[0]
+    
+        return fig, axes
 
     # to string
     def __repr__(self):
