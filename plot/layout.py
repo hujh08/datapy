@@ -659,6 +659,8 @@ class RectManager:
                'only support set to Figure instance'
 
         if self._fig is not None:  # already created
+            if self._fig is fig:
+                return
             raise Exception('figure already created')
 
         # w, h in inches
@@ -918,6 +920,8 @@ class RectGrid:
                     m=g._manager
                     break
         return m
+
+    get_manager=_get_manager
 
     ## register at manager
     def _register_at_manager(self, manager):
@@ -2097,19 +2101,22 @@ class RectGrid:
         manager._add_lncomb(p1-pp0, v1*pw)
 
     ## set all dists ratios
-    def set_grid_ratios(self, loc=[0.1, 0.8], origin_upper=False,
-                            ratios_w=1, ratios_h=None,
-                            ratios_wspace=0.01, ratios_hspace=None,
+    def set_grid_ratios(self, loc=0.1, origin_upper=False,
+                            ratios_w=1, ratios_h=1,
+                            ratios_wspace=None, ratios_hspace=None,
                             ratio_wh=None):
         '''
-            set all dists ratios in grid
+            Set ratios of distances in grid relative that of origin rect
 
-            after those setting, rects of grid should be fixed relative to parent rect
+            If all setted, rects of grid should be fixed relative to parent rect
 
             Parameters:
-                loc: [x0, w] or [x0, y0, w, h]
+                loc: float, [x0, w] or [x0, y0, w, h]
                     rectangle of whole axes
                     in unit of fraction in figure
+
+                    if float, means all margin
+                        equal to `[loc, loc, 1-2*loc, 1-2*loc]`
 
                     if [x0, w], means y0, h = x0, w
 
@@ -2117,19 +2124,24 @@ class RectGrid:
                     whether the index is given with origin in upper
 
                     if True, order of axes starts from upper-left corner
+                    otherwise, bottom-left
 
+                ratios_w, ratios_h: None, float, array of float
+                    ratios of width/height of rects in grid relative to origin rect
+                    
+                    if None, not set
 
-                ratios_w, ratios_h: float, array of float
-                    ratios of width/height of rects in grid
+                    if float, it means ratios of other rects to origin rect
 
-                    if float, or `len(ratios_w, or ratios_h) == nx-1 (or ny-1)`
-                        it means ratios with respect to rect[0, 0] in left-bottom
+                    if array, its len should be `nx-1`, or `nx` (`ny-1`, `ny` respectively)
+                        for `nx-1`, it means `[1, *ratios]`
 
-                    if `ratios_h == None`, use `ratios_h = ratios_w`
+                ratios_wspace, ratios_hsapace: None, float, array of float
+                    ratios of wspace, hspace relative to origin rect
+                    Similar as `ratios_w`, `ratios_h`
+                        Except, if array, its len must be `nx-1`, `ny-1` respectively
 
-                ratios_wspace, ratios_hsapace: float, array of float
-                    ratios of wspace, hspace with respect to origin rect
-                    similar as `ratios_w`, `ratios_h`
+                    if None, not set
 
                 ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
                     ratio w/h for one axes or whole axes region (if given (None, int))
@@ -2140,26 +2152,31 @@ class RectGrid:
                     if (None, r), set for whole rect
         '''
         # location of grid
-        if len(loc)==2:
+        if isinstance(loc, numbers.Number):
+            x0=y0=loc
+            w=h=1-2*loc
+        elif len(loc)==2:
             x0, w=y0, h=loc
         else:
             x0, y0, w, h=loc
         self.set_loc_at([x0, y0, w, h], locing='wh')
     
         # ratio of widths/heights with respect to axes[0, 0] at left-bottom
-        self.set_dists_ratio(ratios_w, 'width', origin_upper=origin_upper)
+        if ratios_w is not None:
+            self.set_dists_ratio(ratios_w, 'width', origin_upper=origin_upper)
     
-        if ratios_h is None:
-            ratios_h=ratios_w
-        self.set_dists_ratio(ratios_h, 'height', origin_upper=origin_upper)
+        if ratios_h is not None:
+            self.set_dists_ratio(ratios_h, 'height', origin_upper=origin_upper)
     
         ## ratio of wspace/hspace with respect to axes[0, 0]
         rect0=self[-1, 0] if origin_upper else self[0, 0]
-        self.set_seps_ratio_to(rect0.width, ratios_wspace, axis='x', origin_upper=origin_upper)
+        if ratios_wspace is not None:
+            self.set_seps_ratio_to(rect0.width, ratios_wspace,
+                    axis='x', origin_upper=origin_upper)
     
-        if ratios_hspace is None:
-            ratios_hspace=ratios_wspace
-        self.set_seps_ratio_to(rect0.height, ratios_hspace, axis='y', origin_upper=origin_upper)
+        if ratios_hspace is not None:
+            self.set_seps_ratio_to(rect0.height, ratios_hspace,
+                    axis='y', origin_upper=origin_upper)
     
         ## ratio of w/h
         if ratio_wh is not None:
@@ -2176,7 +2193,6 @@ class RectGrid:
             manager=self._get_manager()
             manager.set_ratio_to([region.width, region.height], [ratio_wh, 1])
     
-
     ## properties
     for k_ in _GROUPS_DIST:
         doc_='''
@@ -2402,6 +2418,8 @@ class Rect:
             return None if not exists
         '''
         return self._grid._manager
+
+    get_manager=_get_manager
 
     # grid
     def _add_grid(self, nx, ny):
