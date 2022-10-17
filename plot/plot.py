@@ -108,7 +108,9 @@ def plot_2d_hist(ax, *args, bins=None,
 def plot_2d_contour(ax, *args, kde=False, bins=None,
                     xlim=None, ylim=None, limtype='v',
                     levels=None,
-                    fill=False, show_points=False, remove_covered=True,
+                    fill=False,
+                    show_points=False, remove_covered=True, kws_points={'s': 1},
+                    label_points=False,
                     **kwargs):
     '''
         contour plot
@@ -138,6 +140,13 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
                         use 'white' and `plt.contour` function
                     otherwise, use `plt.contourf`
 
+            show_points, remove_covered, kws_points: args to plot scatter of points
+                other two works only `show_points` is True
+                and `show_points` works only if `xs`, `ys` given
+
+                :param remove_covered:
+                    remove points covered by contour
+
         Optional Parameters:
             color(s), linewidth(s) (or lw), linestyle(s) (or ls):
                 setup for line of contours
@@ -148,8 +157,14 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
 
             label: str
                 label for contour
+
+                if `show_points` and `label_points`,
+                    label would be added to scatter plot
+                otherwise to contour
     '''
+    isdata_xys=False
     if len(args)==2:
+        isdata_xys=True
         xs, ys=args
         # calculate histogram
         dens, (xcents, ycents)=\
@@ -239,26 +254,48 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
                     f'only bool or color str/array for `fill`, but got: {fill}')
             contours.collections[0].set_fc(fill)
 
-    ## label
+    # plot points scatter
+    sca=None
+    if isdata_xys and show_points:
+        if remove_covered:
+            xys=np.column_stack([xs, ys])
+
+            pathcol=contours.collections[0]
+            for path in pathcol.get_paths():
+                m=path.contains_points(xys)
+                xys=xys[~m]
+
+            xs, ys=xys.T
+
+        if 'color' not in kws_points and ckey=='color':
+            kws_points['color']=color
+
+        if len(xs)>0:
+            sca=ax.scatter(xs, ys, **kws_points)
+
+    # label
     if label is not None:
-        collections=contours.collections
-        if not use_contourf:
-            if samestyle:   # same style for all contour lines
-                c=collections[0]
-                c.set_label(label)
-                update_handler_for_contour(c, fill=False)
-            else:
-                for c, l in zip(collections, levels):
-                    s=f'{label}: {l}'
-                    c.set_label(s)
-                    update_handler_for_contour(c, fill=False)
+        if label_points and sca is not None:
+            sca.set_label(label)
         else:
-            lowers=levels[:-1]
-            uppers=levels[1:]
-            for c, l, u in zip(collections, lowers, uppers):
-                s=f'{label}: ({l}, {u}]'
-                c.set_label(s)
-                update_handler_for_contour(c, fill=True)
+            collections=contours.collections
+            if not use_contourf:
+                if samestyle:   # same style for all contour lines
+                    c=collections[0]
+                    c.set_label(label)
+                    update_handler_for_contour(c, fill=False)
+                else:
+                    for c, l in zip(collections, levels):
+                        s=f'{label}: {l}'
+                        c.set_label(s)
+                        update_handler_for_contour(c, fill=False)
+            else:
+                lowers=levels[:-1]
+                uppers=levels[1:]
+                for c, l, u in zip(collections, lowers, uppers):
+                    s=f'{label}: ({l}, {u}]'
+                    c.set_label(s)
+                    update_handler_for_contour(c, fill=True)
 
     return contours
 
