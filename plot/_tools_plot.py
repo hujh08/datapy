@@ -186,12 +186,19 @@ def quants_to_levels(weights, quants):
 
     # sort weights
     weights=np.ravel(weights)
+    assert np.all(weights>=0)
+
+    # ## drop zero
+    # weights=weights[weights>0]
+    # assert len(weights)
+
     weights=np.sort(weights)[::-1]
     ws_cum=np.cumsum(weights)/np.sum(weights)
 
     # compute levels
-    inds=np.searchsorted(ws_cum, 1-quants)
-    levels=np.take(weights, inds, mode="clip")
+    levels=np.interp(1-quants, ws_cum, weights)
+    # inds=np.searchsorted(ws_cum, 1-quants)
+    # levels=np.take(weights, inds, mode="clip")
 
     return levels
 

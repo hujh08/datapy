@@ -107,9 +107,13 @@ def plot_2d_hist(ax, *args, bins=None,
 
 def plot_2d_contour(ax, *args, kde=False, bins=None,
                     xlim=None, ylim=None, limtype='v',
-                    levels=None, qthresh=0, **kwargs):
+                    levels=None,
+                    fill=False, show_points=False, remove_covered=True,
+                    **kwargs):
     '''
-        (non-filled) contour plot
+        contour plot
+
+        use `contourf` if fill is bool True, and args `cmap` or `colors` given
 
         Paramters:
             args: (xs, ys) or (dens, xcents, ycents)
@@ -124,11 +128,15 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
                 quantiles of contours to plot
 
                 if None: use levels=10
-                if int: use `np.linspace(qthresh, 1, levels+1)[:-1]`
-                    or `np.linspace(0, 1, levels+1)[1:-1]` if qthresh==0
+                if int n: use `[1/n, 2/n, ..., (n-1)/n]`
 
-            qthresh: float
-                threshold of contour to plot
+            fill: bool, or color (str, array)
+                whether to fill the contour
+
+                if only True, treatment depend on `kwargs`
+                    if not `colors` or `cmap` given,
+                        use 'white' and `plt.contour` function
+                    otherwise, use `plt.contourf`
 
         Optional Parameters:
             color(s), linewidth(s) (or lw), linestyle(s) (or ls):
@@ -156,54 +164,101 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
     if levels is None:
         levels=10
     if isinstance(levels, numbers.Number):
-        assert 0<=qthresh<=1
-        levels=np.linspace(qthresh, 1, levels+1)[:-1]
-        if qthresh==0:
-            levels=levels[1:]
+        levels=np.linspace(0, 1, levels+1)[1:-1]
     else:
         assert all([0<=l<=1 for l in levels])
         levels=np.sort(levels)
 
-    ## to levels in density map
-    vlevels=quants_to_levels(dens, levels)
-
     # setup of contour's lines
+    samestyle=True
+
     ## color
-    if all([k not in kwargs for k in ['color', 'colors']]):
+    ckeys_all=['color', 'colors', 'cmap']  # keys to set color
+    ckeys=[k for k in ckeys_all if k in kwargs]
+    if len(ckeys)>=2:
+        raise ValueError(f'conflict kwargs for color: {ckeys}')
+    elif len(ckeys)==0:
         kwargs['color']=None  # default color
+        ckey='color'  # set `color` args actually
+    else:
+        ckey=ckeys[0]
 
-    if 'color' in kwargs:
-        assert 'colors' not in kwargs, \
-                   'conflict kwargs for color'
-
+    if ckey=='color':
         color=kwargs.pop('color')
         if color is None: # use color cycle by default
             color=get_next_color_in_cycle(ax)
 
         kwargs['colors']=[color]
+    else:
+        samestyle=False
+
+    ### contour or contourf
+    if (type(fill) is bool and fill) and  ckey!='color':
+        use_contourf=True
+        func=ax.contourf
+    else:
+        use_contourf=False
+        func=ax.contour
 
     ## linestyle, linewidth
     for listks in [['linewidth', 'lw'], ['linestyle', 'ls']]:
         kname=listks[0]
 
         ks=[k for k in listks if k in kwargs]
-        if ks:
-            assert len(ks)>1 or f'{kname}s' not in kwargs, \
-                   f'conflict kwargs for {kname}s'
+        ks_multi=[k for k in listks if k+'s' in kwargs]
+        ks_all=ks+ks_multi
+        if len(ks_all)>=2:
+            raise ValueError(f'conflict kwargs for {kname}s: {ks_all}')
+        elif ks_multi:
+            if kname=='linestyle':  # ignore different linewidth
+                samestyle=False
+        elif ks:
             lv=kwargs.pop(ks[0])
             kwargs[kname+'s']=lv
 
     # label
     label=kwargs.pop('label', None)
 
-    # plot contour
-    contours=ax.contour(xcents, ycents, dens, levels=vlevels, **kwargs)
+    # levels in density map
+    if use_contourf and levels[-1]!=1.:
+        levels=[*levels, 1.]
 
-    # label
+    vlevels=quants_to_levels(dens, levels)
+
+    # plot contour
+    contours=func(xcents, ycents, dens, levels=vlevels, **kwargs)
+
+    ## fill
+    if not use_contourf:
+        if type(fill) is bool:
+            if fill:
+                contours.collections[0].set_fc('white')
+        else:
+            if isinstance(fill, str) or len(fill) in [3, 4]:
+                raise ValueError(
+                    f'only bool or color str/array for `fill`, but got: {fill}')
+            contours.collections[0].set_fc(fill)
+
+    ## label
     if label is not None:
-        c=contours.collections[0]
-        c.set_label(label)
-        update_handler_for_contour(c, fill=False)
+        collections=contours.collections
+        if not use_contourf:
+            if samestyle:   # same style for all contour lines
+                c=collections[0]
+                c.set_label(label)
+                update_handler_for_contour(c, fill=False)
+            else:
+                for c, l in zip(collections, levels):
+                    s=f'{label}: {l}'
+                    c.set_label(s)
+                    update_handler_for_contour(c, fill=False)
+        else:
+            lowers=levels[:-1]
+            uppers=levels[1:]
+            for c, l, u in zip(collections, lowers, uppers):
+                s=f'{label}: ({l}, {u}]'
+                c.set_label(s)
+                update_handler_for_contour(c, fill=True)
 
     return contours
 
