@@ -147,6 +147,10 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
                 :param remove_covered:
                     remove points covered by contour
 
+            label_points: bool, default False
+                if True, label (if given) would added to scatter plot
+                otherwise to contour
+
         Optional Parameters:
             color(s), linewidth(s) (or lw), linestyle(s) (or ls):
                 setup for line of contours
@@ -156,7 +160,7 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
                 if not `color`(s) given, use color cycle
 
             label: str
-                label for contour
+                label for contour or scatter plot of points
 
                 if `show_points` and `label_points`,
                     label would be added to scatter plot
