@@ -1,6 +1,6 @@
 
-from .text import load_txt, save_to_txt
+from .text import *
 
-from .recfits import load_rec_fits, save_to_rec_fits
+from .recfits import *
 
-from .yaml import load_yaml
+from .yaml import *

@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 from astropy.io import fits
 
+__all__=['load_rec_fits', 'save_to_rec_fits']
+
 def load_rec_fits(fname, ext=None, return_rec=False, **kwargs):
     d=load_fits_data(fname, ext=ext)
 

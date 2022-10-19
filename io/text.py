@@ -9,6 +9,8 @@ import re
 
 import pandas as pd
 
+__all__=['load_txt', 'load_txts', 'save_to_txt']
+
 # read text
 def load_txt(fileobj, line_nrow=None, header_comment=False,
                 delim_whitespace=True, comment='#', 
@@ -133,6 +135,14 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
 
     return df
 
+def load_txts(files, ignore_index=True, **kwargs):
+    '''
+        load multiply txt files
+        return concatenated dataframe
+    '''
+    dfs=[load_txt(f, **kwargs) for f in files]
+    return pd.concat(dfs, ignore_index=ignore_index)
+
 ## auxiliary functions
 def read_nth_line(fileobj, n, restore_stream=False):
     '''
@@ -171,18 +181,25 @@ def line_comment_strip(line, comment='#'):
     return re.sub(r'[%s].*$' % comment, '', line)
 
 # write text
-def save_to_txt(df, buf=None, index=False, **kwargs):
+def save_to_txt(df, path_or_buf=None, index=False, sep=' ', **kwargs):
     '''
         save DataFrame to text file
+            hujh-friendly default arguments
 
         wrap of method `DataFrame.to_string`
+
+        changelog:
+            2022/04/26: use `df.to_csv`, instead of `df.to_string`
+                output of the latter has no '\n' in last line
+                    which may raise wrong result for some frequently used routine
+                        like `wc -l`
 
         Parameters:
             df: DataFrame
                 object to save
 
-            buf: str, Path or StringIO-like, or default None
+            path_or_buf: str, Path or StringIO-like, or default None
                 buffer to write to. same as `to_string`
                 if None, output is returned
     '''
-    return df.to_string(buf, index=index, **kwargs)
+    return df.to_csv(path_or_buf, index=index, sep=sep, **kwargs)
