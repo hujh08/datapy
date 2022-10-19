@@ -84,6 +84,15 @@ def print_df(df, reset_index=False, **kwargs):
 
     print(df.to_string(**kwargs))
 
+def print_tab(tab, reset_index=True, index=False, **kwargs):
+    '''
+        print 2d tab
+
+        wrapper of `print_df`
+    '''
+    print_df(tab, reset_index=reset_index,
+                  index=index, **kwargs)
+
 # na
 def has_na(d):
     '''
@@ -142,6 +151,43 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
         dftab=dftab.reset_index()
 
     return dftab
+
+# statistic of df
+def df_count_by_group(df, ccol, hcol, vcol, fillna=0,
+                         sort_hcol=None, sort_vcol=None):
+    '''
+        count df in group of two columns
+        output a 2d table
+
+        Parameters:
+            df: dataframe
+                data to count
+
+            ccol: str
+                name to count
+
+            hcol: str
+                name for horizontal axis of output table
+
+            vcol: str
+                name for vertical axis of output table
+
+            sort_hcol, sort_vcol: list
+                list to sort hcol or vcol
+    '''
+    df_cnt=df.groupby([hcol, vcol])\
+             .agg({ccol: 'count'})\
+             .reset_index()
+
+    tab=df_to_2dtab(df_cnt, hcol, vcol, ccol, fillna=fillna)
+
+    if sort_hcol is not None:
+        tab=sort_index_by_list(tab, sort_hcol, axis=1)
+
+    if sort_vcol is not None:
+        tab=sort_index_by_list(tab, sort_vcol, axis=0)
+
+    return tab
 
 # concat along index
 def concat_dfs(dfs, mcol=None, marks=None, ignore_index=True):
