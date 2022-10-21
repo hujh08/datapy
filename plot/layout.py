@@ -58,7 +58,7 @@ class RectManager:
             Parameters:
                 size: int, or None
                     max num of grid to hold
-                    
+
                     if None, no limit
 
                 size_vs: int or None
@@ -350,7 +350,7 @@ class RectManager:
                 LnComb:
                     with const in unit of inches
         '''
-        labsize=self.get_ticksize(axis, 'lab').const
+        labsize=self.get_ticksize(axis, 'lab').const  # lab for tick lable
         padsize=max([self.get_ticksize(axis, 'pad', t).const
                         for t in ['major', 'minor']])
 
@@ -364,20 +364,20 @@ class RectManager:
         return LnComb.lncomb(v)
 
     ## sep size for axis
-    def get_sepsize_axis(self, axis,
-                               lab=True, nchar_lab=1,
-                               tick_out=True, nchar_tick=1):
+    def get_ticksepsize_axis(self, axis,
+                               nchar_tick=1, nchar_lab=1,
+                               tick_out=False, lab=True):
         '''
             min separation size for x/y-axis plot
             that is sum of size of tick plot,
                                    axes label,
                                    axes pad
         '''
-        s=self.get_ticksize(axis, out=tick_out, nchar=nchar_tick)
+        s=self.get_sepsize_tick(axis, out=tick_out, nchar=nchar_tick)
 
         if lab:
-            labsize=self.get_fontsize(rcParams['axes.labelsize'])
-            labpad=self.get_fontsize(rcParams['axes.labelpad'])
+            labsize=self.get_fontsize(plt.rcParams['axes.labelsize'])
+            labpad=self.get_points_size(plt.rcParams['axes.labelpad'])
 
             s=s+nchar_lab*labsize+labpad
 
@@ -689,6 +689,8 @@ class RectManager:
                     acts only when fig not created and
                                 w, h not determined from constraints
 
+                    allow None for w or h to skip setting it
+
                     if ratio w/h could be determined,
                         use as large size as possible to keep the ratio
 
@@ -709,26 +711,12 @@ class RectManager:
         w, h=self.eval_figsize()
 
         if w is None or h is None:
-            if figsize is None:
-                figsize=plt.rcParams['figure.figsize']
-
-            w, h=figsize
-            assert isinstance(w, numbers.Real) and \
-                   isinstance(h, numbers.Real), \
-                    'only allow float for `figsize`'
-
-            # ratio w/h eval
-            k=self.eval_wh_ratio()
-            if k is None:
-                root.set_width(w)
-                root.set_height(h)
-            elif w>k*h:
-                root.set_height(h)
-            else:
-                root.set_width(w)
+            self._set_figsize(figsize)
 
             # eval from figsize
             w, h=self.eval_figsize()
+            if w is None or h is None:
+                raise ValueError(f'`figsize` "{figsize}"" not enough to fix figure: {(w, h)}')
 
         # dpi
         px=self.eval_dpi()
@@ -784,6 +772,48 @@ class RectManager:
         return axes
 
     ## auxiliary functions
+    def _set_figsize(self, figsize=None):
+        '''
+            set figsize
+
+            :param figsize: None, or (w, h)
+                allow None for w or h for not skip it
+
+                if figsize is None, use `plt.rcParams['figure.figsize']`
+
+                if both given not None and ratio in manager has been fixed,
+                    use as large size as possible to keep the ratio
+        '''
+        if figsize is None:
+            figsize=plt.rcParams['figure.figsize']
+
+        w, h=figsize
+        if w is None and h is None:
+            return
+
+        root=self._root_rect
+        if w is None:
+            root.set_height(h)
+            return
+
+        if h is None:
+            root.set_width(w)
+            return
+
+        assert isinstance(w, numbers.Real) and \
+               isinstance(h, numbers.Real), \
+                'only allow float for `figsize`'
+
+        # ratio w/h eval
+        k=self.eval_wh_ratio()
+        if k is None:
+            root.set_width(w)
+            root.set_height(h)
+        elif w>k*h:
+            root.set_height(h)
+        else:
+            root.set_width(w)
+
     def _set_grps_share_axis(self, axis, grps=None, ignore_nonexists=True):
         '''
             set axis share for list of groups
@@ -1297,7 +1327,7 @@ class RectGrid:
         '''
             return rect via self[prop]
             always create new rect
-            
+
             same syntax as GridSpec
             Note:
                 g[0] for first rect
@@ -1331,7 +1361,7 @@ class RectGrid:
 
         assert isinstance(i, numbers.Integral), \
                 'only support integral for point index'
-        
+
         i0=i
         if i<0:
             i+=num
@@ -1448,58 +1478,6 @@ class RectGrid:
         else:
             return LineSeg1D(p1, p0)
 
-    ## unit for dist
-    def get_dist_unit(self, unit, axis='x'):
-        '''
-            unit for distance
-            
-            Parameters:
-                unit: None, str, int, or object with attr `to_lncomb`
-                    unit of element in `vals`
-
-                    if None, no unit ('inches' by default)
-
-                    str: 'figure', 'prect', 'grid', 'rect', or 'pixel', 'px', ...
-                        figure: w or h of figure
-                        prect: w or h of parent rect
-                        grid: w h of grid
-                        rect: w or h of 0th (bottom-left) rect in grid
-                        others: see `RectManager.get_size_unit`
-
-                    int: ith rect in grid (count from bottom-left)
-
-                axis: 'x' or 'y'
-                    axis of distance
-        '''
-        if hasattr(unit, 'to_lncomb'):
-            return unit
-
-        s_brects=['figure', 'prect', 'grid', 'rect']  # str for base rect
-        if isinstance(unit, str):
-            if unit not in s_brects:
-                return self._get_manager().get_size_unit(unit)
-
-            if unit=='figure':
-                brect=self.get_manager().rect
-            elif unit=='prect':
-                brect=self.get_parent()
-            elif unit=='grid':
-                brect=self
-            else:
-                brect=self.get_rect(0)
-
-        else:
-            if not isinstance(unit, numbers.Integral):
-                raise TypeError('only allow str or int as unit')
-
-            brect=self.get_rect(unit)
-
-        assert axis in ['x', 'y']
-        if axis=='x':
-            return brect.width.to_lncomb()
-        else:
-            return brect.height.to_lncomb()
-
     ## get collection of same type of dist
     def get_all_widths(self, origin_upper=False):
         '''
@@ -1550,6 +1528,181 @@ class RectGrid:
         if origin_upper:
             hmargins=hmargins[::-1]
         return hmargins
+
+    # distance with val and unit
+    def get_dist_unit(self, unit, axis='x', val=None):
+        '''
+            get `lncomb` for distance in an unit with optional `val`
+
+            Parameters:
+                val: None, float, dictable or list (as args)
+                    val of distance in given `unit`
+
+                    if None, return unit dist by default
+                        for most unit, it means 1,
+                            except for 'function' type unit
+                                where to use empty dict {}
+
+                    arg-able `val` only for 'func' type unit
+
+                unit: str, int, or `LnComb`-like
+                    unit of element in `vals`
+
+                    lncomb-like: object with `to_lncomb`
+                        `LnComb` for dist unit
+
+                    str: 3 classes
+                        - rect: 'figure', 'prect', 'grid', 'rect', 'recti'
+                            w or h (by `axis`) of the rect
+
+                            * 'figure': root rect in figure
+                            * 'prect' : parent rect
+                            * 'grid'  : this grid
+                            * 'rect'  : origin rect (0th, bottom-left) in grid
+                            * 'recti' : ith rect (origin at bottom-left) in grid
+
+                        - absolute unit: 'pixel', 'points', ...
+                            see `RectManager.get_size_unit`
+
+                        - function: 'ticksep'
+                            to call a function with given `axis` and `val`
+
+                            only one currently for this type of unit
+
+                            * 'ticksep[,k[=v]]': for `RectManager.get_ticksepsize_axis`
+                                default kws (by order in funcion):
+                                    dict(nchar_tick=1, nchar_lab=1,
+                                         tick_out=False, lab=True)
+
+                                optional k1[=v1],k2[=v2],...
+                                    is to define order of args in function and default value
+                                v could be string of int, float or 'true', 'false' (case-ignored)
+
+                            if val is float, use it as first arg to call the func
+
+                    int: ith rect in grid (origin at bottom-left)
+
+                axis: 'x' or 'y'
+                    along which axis for distance
+
+                    it works only when 'rect' type unit given
+        '''
+        assert axis in ['x', 'y']
+
+        # lncomb-like unit
+        if hasattr(unit, 'to_lncomb'):
+            if isinstance(unit, LineSeg1D):
+                assert axis==unit._axis
+            dist=unit.to_lncomb()
+            if val is not None:
+                if not isinstance(val, numbers.Real):
+                    raise TypeError('only allow float for lncomb-like unit')
+                dist=val*dist
+            return dist
+
+        # str for 'func', 'rect' type unit
+        ## map for 'func' unit: {s: [func, list of keys]}
+        s_funcs={'ticksep': [lambda g: g._get_manager().get_ticksepsize_axis,
+                             ['nchar_tick', 'nchar_lab', 'tick_out', 'lab']],
+                }
+        if isinstance(unit, str):
+            sunit, *kvitems=unit.split(',')
+            # 'func' type unit
+            if sunit in s_funcs:
+                if val is None:
+                    val={}
+
+                lfunc, keys=s_funcs[sunit]
+                func=lfunc(self)
+                if isinstance(val, dict):
+                    return func(axis, **val)
+                else: # list or float `val`
+                    if isinstance(val, numbers.Number):
+                        vals=[val]
+                    else:
+                        vals=list(val)
+
+                    nval=len(vals)
+                    if nval>len(keys):
+                        raise ValueError(f'too many args for unit `{sunit}`')
+
+                    keys=list(keys)
+                    kws_unit={}
+
+                    # handle arg order and default val
+                    n=len(kvitems)
+                    for i in range(n):
+                        k, *vs=kvitems[i].split('=', maxsplit=1)
+                        k=k.strip()
+                        if k not in keys:
+                            s=f'unexpected arg in unit `{unit}`: `{k}`'
+                            raise ValueError(s)
+
+                        keys.remove(k)
+
+                        # values
+                        if i<nval:
+                            kws_unit[k]=vals[i]
+                        elif not vs:
+                            continue
+                        else:
+                            s=vs[0].strip().lower()
+                            if s in ['true', 'false']:
+                                kws_unit[k]=True if s=='true' else False
+                            elif re.match(r'^[+-]*\d+$', s):
+                                kws_unit[k]=int(s)
+                            else:
+                                kws_unit[k]=float(s)
+
+                    vals=vals[n:]
+                    if vals:
+                        for k, v in zip(keys, vals):
+                            kws_unit[k]=v
+
+                    return func(axis, **kws_unit)
+
+            if kvitems:
+                raise ValueError(f'unexpected unit: {unit}')
+
+            # 'absolute' type
+            if sunit in RectManager._UNITS:
+                dist=self._get_manager().get_size_unit(sunit)
+                if val is not None:
+                    if not isinstance(val, numbers.Real):
+                        raise TypeError('only allow float for \'absolute\' unit')
+                    dist=dist*val
+                return dist
+
+            # 'rect' type
+            if sunit=='figure':
+                prect=self.get_manager().rect
+            elif sunit=='prect':
+                prect=self.get_parent()
+            elif sunit=='grid':
+                prect=self
+            elif sunit[:4]=='rect':
+                i=0 if not sunit[4:] else int(sunit[4:])
+                prect=self.get_rect(i)
+            else:
+                raise ValueError(f'unexpected unit str: {unit}')
+
+        # int unit for 'rect'
+        else:
+            if not isinstance(unit, numbers.Integral):
+                raise TypeError('only allow str or int as unit')
+            prect=self.get_rect(unit)
+
+        ## val
+        if val is None:
+            val=1
+        elif not isinstance(val, numbers.Real):
+            raise TypeError('only allow float for non-func unit')
+
+        assert axis in ['x', 'y']
+        if axis=='x':
+            return prect.width.to_lncomb()*val
+        else:
+            return prect.height.to_lncomb()*val
 
     ## get collection of dists in group
     _GROUPS_DIST=['width',   'height', 'wspace',  'hspace', 
@@ -1608,26 +1761,38 @@ class RectGrid:
             set value(s) for collection of dists
 
             Parameters:
-                vals: float or list of float
+                vals: float, dict, or list of None, float, dict or list of args
                     value(s) to set
 
+                    if float or dict, expand to `[v]*n` for n = num of dists
+
                     if list, must has same len with num of dists
+                        elements could be of None, float, dict or list of args
+                            the last two valid only when `units` not None
+
+                        if None, skip corresponding dist
 
                 dist_group: 'width', 'height', 'wspace', 'hspace'
                            'wmargin', 'hmargin', 'margin', 'sep'
                     group of dists to set
 
-                units: None, str, int, obj with `to_lncomb`, or list of scalar
-                    str: 'figure', 'prect', 'grid', 'rect', or 'pts', 'px', ...
-                    int: ith rect in grid (count from bottom-left)
-
+                units: None, str, int, `LnComb`-like, or list of None, scalar
+                    unit scalar:
+                        str: 'figure', 'prect', 'grid', 'rect', or
+                             'points', 'pixel', ... or
+                             'ticksep'
+                        int: ith rect in grid (count from bottom-left)
                     see `get_dist_unit` for detail
+
+                    if list, its length must be equal to num of dists
+                        elements could be None or scalar
+                        if None, use no unit
         '''
         dists=self.get_dists_by_group(dist_group, origin_upper=origin_upper)
         n=len(dists)
 
         # values
-        if not isinstance(vals, abc.Iterable):
+        if isinstance(vals, numbers.Number) or isinstance(vals, dict):
             vals=[vals]*n
         else:
             vals=list(vals)
@@ -1645,15 +1810,24 @@ class RectGrid:
 
             vals1=[]
             for di, vi, ui in zip(dists, vals, units):
-                if ui is None:
+                if vi is None:
                     vals1.append(vi)
                     continue
-                ui=self.get_dist_unit(ui, axis=di._axis)
-                vals1.append(vi*ui)
+
+                if ui is None:
+                    if not isinstance(vi, numbers.Real):
+                        raise TypeError('only allow float for non-unit value')
+                    vals1.append(vi)
+                    continue
+
+                vi=self.get_dist_unit(ui, axis=di._axis, val=vi)
+                vals1.append(vi)
             vals=vals1
 
         # set vals
         for di, vi in zip(dists, vals):
+            if vi is None:
+                continue
             di.set_to(vi)
 
     def set_dists_bound(self, val, dist_group='sep', upper=True, origin_upper=False):
@@ -1897,16 +2071,38 @@ class RectGrid:
             set separations for vals
 
             Parameters:
+                vals: float, dict, or list of None, float, dict or list of args
+                    value(s) to set for separations between rects
+
+                    if float or dict, expand to `[v]*n` for n = `nx-1` or `ny-1`
+
+                    if list, its len must equal to `nx-1` or `ny-1`
+                        elements could be of None, float, dict or list of args
+                            the last two valid only when `units` not None
+
+                        if None, skip corresponding dist
+
+                    NOTE: if `axis=='both'`, same `vals` for both x/y-axis
+                        use `RectGrid.set_dists_val` with `dist_group='sep'`
+                            to set different separations along x and y axis
+
                 axis: 'x', 'y', or 'both'
                     separations along which axis to set
 
                     if 'both', same `vals` for both x/y-axis
 
-                units: None, str, int, obj with `to_lncomb`, or list of scalar
-                    str: 'figure', 'prect', 'grid', 'rect', or 'pts', 'px', ...
-                    int: ith rect in grid (count from bottom-left)
-
+                units: None, str, int, `LnComb`-like, or list of None, scalar
+                    unit scalar:
+                        str: 'figure', 'prect', 'grid', 'rect', or
+                             'points', 'pixel', ... or
+                             'ticksep'
+                        int: ith rect in grid (count from bottom-left)
+                        lncomb-like obj: with attr `to_lncomb`
                     see `get_dist_unit` for detail
+
+                    if list, its length must be equal to `nx-1` or `ny-1`
+                        elements could be None or scalar
+                        if None, use no unit
         '''
         if axis=='both':
             self.set_seps(vals, 'x', units)
@@ -1970,14 +2166,33 @@ class RectGrid:
             set margins for vals
 
             Parameters:
+                vals: float, dict, or list of None, float, dict or list of args
+                    value(s) to set for margins between rect and its parent
+
+                    if float or dict, expand to `[v]*n` for n = num of dists
+
+                    if list, its len must equal to `nx-1` or `ny-1`
+                        elements could be of None, float, dict or list of args
+                            the last two valid only when `units` not None
+
+                        if None, skip corresponding dist
+
+                    NOTE: if `axis=='both'`, same `vals` for both x/y-axis
+                        use `RectGrid.set_dists_val` with `dist_group='sep'`
+                            to set margins along x and y axis
+
                 axis: 'x', 'y', or 'both'
                     margins along which axis to set
 
                     if 'both', same `vals` for both x/y-axis
 
                 units: None, str, int, obj with `to_lncomb`, or list of scalar
-                    str: 'figure', 'prect', 'grid', 'rect', or 'pts', 'px', ...
-                    int: ith rect in grid (count from bottom-left)
+                    unit scalar:
+                        str: 'figure', 'prect', 'grid', 'rect', or
+                             'points', 'pixel', ... or
+                             'ticksep'
+                        int: ith rect in grid (count from bottom-left)
+                        lncomb-like obj: with attr `to_lncomb`
 
                     see `get_dist_unit` for detail
         '''
@@ -2005,103 +2220,290 @@ class RectGrid:
         '''
         self.set_dists_equal(dist_group='margin')
 
-    def set_loc_at(self, loc, axis='xy', at='parent', locing='wh'):
+    ### location at a top rect
+    def set_loc_at_toprect_along_axis(self, toprect, axis,
+                                            loc, locing='m', locunits=None):
+        '''
+            set loc at `toprect` along an axis
+            base function for 'location setting'
+
+            Parameters:
+                toprect: `Rect` instance
+                    top rect what the `loc` is relative to
+
+                axis: 'x', 'y'
+                    along which axis the loc is
+
+                loc: float, dict, (x0, x1)
+                    location in top rect
+
+                    if float or dict, means margin
+                        `locing` not work in this case (fixed to 'm')
+
+                    meaning of x0, x1 defined by `locing` and `locunits`
+
+                    x0, x1 could be None, float, or dict or list of args
+                        the last two valid only when `locunits` is of 'func' type
+                            see `get_dist_unit` for detail
+                        if None, skip setting
+
+                locing: 'x', 'w', 'm'
+                    how the `loc` specifies location
+                    fixed to 'm' when float given in `loc` or x1 unit being 'ticksep'
+
+                    'x': points x
+                        x0, x1 - two endpoints of grid along the axis
+
+                    'w': width
+                        x0 - left points
+                        x1 - width
+
+                    'm': margin
+                        x0, x1 - two margins to top rect
+
+                locunits: None, str, int, `LnComb`-like, or list of scalar
+                    what the value of number in `loc` really is
+
+                    if None, use width or height (by `axis`) as default
+
+                    if unit scalar,
+                        str: 'figure', 'prect', 'grid', 'rect', or
+                             'points', 'pixel', ... or
+                             'ticksep[,k=[v]]'
+                        int: ith rect in grid (count from bottom-left)
+                        lncomb-like obj: with attr `to_lncomb`
+
+                    see `get_dist_unit` for detail
+
+                    if scalar, use same unit for both x0 and x1
+        '''
+        # type check
+        if not isinstance(toprect, Rect):
+            raise TypeError('only allow <Rect> instance as `toprect`')
+
+        if toprect._get_manager() is not self._get_manager():
+            raise ValueError('must same `RectManager` for `toprect`')
+
+        if axis not in ['x', 'y']:
+            raise ValueError(f"only allow 'x' or 'y' as `axis`, but got {axis}")
+
+        assert loc is not None
+        scalar_loc=isinstance(loc, numbers.Number) or isinstance(loc, dict)
+
+        ## locing
+        if locing not in ['x', 'w', 'm']:
+            raise ValueError(f'unexpected `locing`: {locing}')
+
+        ## locunits
+        if locunits is None:
+            locunits=toprect.width if axis=='x' else toprect.height
+            locunits=(locunits, locunits)
+        elif isinstance(locunits, str) or \
+             isinstance(locunits, numbers.Number) or \
+             hasattr(locunits, 'to_lncomb'):
+            if scalar_loc:  # all scalar
+                locunits=self.get_dist_unit(locunits, axis=axis, val=loc)
+                loc=1
+            elif isinstance(locunits, str) and locunits[:7]=='ticksep':
+                locing='m'
+            locunits=(locunits, locunits)
+        elif len(locunits)!=2:
+            raise ValueError(f'len of `locunits` must be 2 if list, '
+                             f'but got {len(locunits)}')
+        elif isinstance(locunits[1], str) and locunits[1][:7]=='ticksep':
+            locing='m'
+
+        ## loc
+        if scalar_loc:
+            loc=(loc, loc)
+            locing='m'
+        elif len(loc)!=2:
+            raise ValueError(f'non scalar `loc` must has len 2, '
+                             f'but got {len(loc)}')
+
+        # line segs to constraint by `locing`
+        pp0=toprect.get_point(axis, 0)
+        p0=self.get_point(axis, 0)
+        p1=self.get_point(axis, -1)
+
+        dist0=p0-pp0
+        if locing=='x':
+            dist1=p1-pp0
+        elif locing=='w':
+            dist1=p1-p0
+        else:  # locing=='m'
+            pp1=toprect.get_point(axis, -1)
+            dist1=pp1-p1
+
+        dists=[dist0, dist1]  # distances to equal to x0, x1
+
+        # set location
+        manager=self.get_manager()
+        for di, vi, ui in zip(dists, loc, locunits):
+            if vi is None:
+                continue
+            vi=self.get_dist_unit(ui, axis=axis, val=vi)
+            manager._add_lncomb(di, vi)
+
+    def set_loc_along_axis(self, axis, loc, at='parent', **kwargs):
+        '''
+            set location at a rect along an axis
+
+            :param axis: 'x' or 'y'
+
+            :param at: str or `Rect` instance, default: 'parent'
+                specify which rect is for the `loc`
+
+                str: 'parent', 'root', 'figure', 'fig'
+                    last 3 all for root rect of figure
+
+            other arguments refer to `set_loc_at_toprect_along_axis` for detail
+        '''
+        prect=self._get_rect_at_for_loc(at)
+        self.set_loc_at_toprect_along_axis(prect, axis, loc, **kwargs)
+
+    def set_loc(self, loc, locing='wh', locunits=None, at='parent'):
         '''
             set loc at parent/root rect
 
             Parameters:
-                loc: 4 or 2-tuple of floats
+                loc: float, dict, 4 or 2-tuple of floats
                     fraction at a rect
-                    
-                    (x0, y0, w, h) or (x0, y0, x1, y1)
-                        x0, y0: coordinates for left-bottom corner
-                        x1, y1: coordinates for right-top corner
-                        w, h: total width and height of grid
 
-                    or just (x0, w) or (x0, x1) for x-axis
-                    similar for y-axis
+                    if float or dict, means margin
+                        `locing` fixed to 'margin'
 
-                axis: 'x', 'y', 'xy'
-                    which axis to set
+                    if len==2, use same loc for x-/y-axis
 
-                    if 'xy', set both
+                    if len==4, [x0, y0, x1, y1]
+                        meaning of xi, yi is given by `locing` and `locunits`
 
-                at: 'parent', 'root', 'fig', default: 'parent'
+                    elements could be None to ignore it
+
+                locing: 'wh', 'xy', 'margin', 'm', or combination of 'xwm', default: 'wh'
+                    how the `loc` specifies location
+                    fixed to 'm' when float given in `loc`
+
+                    'm' is same as 'margin'
+
+                    combination of 'xwm': used to specify different locing along x/y axis
+                        'x', 'w', 'm' for points, width, and margin
+                        see `set_loc_at_toprect_along_axis` for detail
+
+                locunits: None, str, int, `LnComb`-like, or list
+                    what the value of number in `loc` really is
+
+                    if None, use width or height (by `axis`) as default
+
+                    if list, len must be 1, 2, 4
+                        - len==1: element for both x and y axis
+                        - len==2: elements for x, y respectively
+                        - len==4: correspond to [x0, y0, x1, y1]
+
+                    if unit scalar,
+                        str: 'figure', 'prect', 'grid', 'rect', or
+                             'points', 'pixel', ... or
+                             'ticksep[,ki=[vi]]'
+                        int: ith rect in grid (count from bottom-left)
+                        lncomb-like obj: with attr `to_lncomb`
+
+                    see `get_dist_unit` for detail
+
+                    if scalar, use same unit for both x0 and x1
+
+                at: str or `Rect` instance, default: 'parent'
                     specify which rect is for the `loc`
 
-                locing: 'wh' or 'xy', default: 'wh'
-                    whether `loc` is (x0, y0, w, h) or (x0, y0, x1, y1)
+                    str: 'parent', 'root', 'figure', 'fig'
+                        last 3 all for root rect of figure
         '''
-        # type check
-        vs_at=['parent', 'root', 'fig']
-        assert at in vs_at, 'ony allow `at` in %s' % str(vs_at)
+        # args normalize
+        prect=self._get_rect_at_for_loc(at)
 
-        vs_lc=['wh', 'xy']
-        assert locing in vs_lc, 'ony allow `locing` in %s' % str(vs_lc)
-
-        assert len(loc) in [2, 4] and \
-               all([isinstance(t, numbers.Real) for t in loc]), \
-                'only allow tuple of 2 or 4 floats as `loc`'
-
-        # locing
-        if locing=='wh':
-            loc=np.array(loc).reshape(2, -1)
-            loc[1]+=loc[0]  # x0+w, y0+h
-            loc=list(np.ravel(loc))
-
-        # relative rect
-        manager=self.get_manager()
-
-        if at=='parent':
-            prect=self.get_parent()
+        ## loc: to xloc, yloc
+        if isinstance(loc, numbers.Number) or isinstance(loc, dict):
+            xloc=yloc=loc
+            locing='m'
         else:
-            prect=manager.rect
+            loc=list(loc)
+            n=len(loc)
+            if n==2:
+                xloc=yloc=loc
+            elif n==4:
+                x0, y0, x1, y1=loc
+                xloc=[x0, x1]
+                yloc=[y0, y1]
+            else:
+                raise ValueError(f'len of `loc` must be 2 or 4 if list, '
+                                 f'but got {len(loc)}')
 
-        ## axis
-        vs_axis=['x', 'y', 'xy']
-        assert axis in vs_axis, 'ony allow `axis` in %s' % str(vs_axis)
+        ## locing: to xlocing, ylocing
+        if locing in ['wh', 'xy', 'margin', 'm']:
+            xlocing=ylocing=locing[0]
+        elif len(locing)==2:
+            xlocing, ylocing=locing
+        else:
+            raise ValueError(f'unexpected value for `locing`: {locing}')
 
-        self._set_loc_at_by_axis(loc, axis, prect)
+        ## locunits: to xlocu, ylocu
+        if locunits is None:
+            xlocu=prect.width
+            ylocu=prect.height
+        elif isinstance(locunits, str) or \
+             isinstance(locunits, numbers.Number) or \
+             hasattr(locunits, 'to_lncomb'):
+            xlocu=ylocu=locunits
+        else:
+            locunits=list(locunits)
+            n=len(locunits)
+            if n==1:
+                xlocu=ylocu=locunits[0]
+            elif n==2:
+                xlocu, ylocu=locunits
+            elif n==4:
+                ux0, uy0, ux1, uy1=locunits
+                xlocu=[ux0, ux1]
+                ylocu=[uy0, uy1]
+            else:
+                raise ValueError(f'len of `locunits` must be 1, 2 or 4 if list, '
+                                 f'but got {len(locunits)}')
+
+        # set loc for both axis individually
+        self.set_loc_at_toprect_along_axis(prect, 'x', xloc,
+                                                locing=xlocing, locunits=xlocu)
+        self.set_loc_at_toprect_along_axis(prect, 'y', yloc,
+                                                locing=ylocing, locunits=ylocu)
 
     ### auxiliary functions
-    def _set_loc_at_by_axis(self, loc, axis, rect0):
+    def _get_rect_at_for_loc(self, at):
         '''
-            set loc at `rect0` along axis
-            
-            Parameters:
-                loc: (x0, x1)
-                axis: 'x', 'y', or 'xy'
-                rect0: relative upper level rect
+            return rect for loc to relate
+
+            :param at: str or `Rect` instance, default: 'parent'
+                specify which rect is for the `loc`
+
+                str: 'parent', 'root', 'figure', 'fig'
+                    last 3 all for root rect of figure
         '''
-        if axis=='xy':
-            if len(loc)==2:
-                locx=locy=loc
+        if isinstance(at, Rect):
+            prect=at
+        else:
+            if not isinstance(at, str):
+                raise TypeError(f'unexpected type for `at`: {type(at)}')
+
+            if at not in ['parent', 'root', 'figure', 'fig']:
+                raise ValueError(f'unexpected value for `at`: {at}')
+
+            if at=='parent':
+                prect=self.get_parent()
             else:
-                locx=(loc[0], loc[2])
-                locy=(loc[1], loc[3])
+                prect=self.get_manager().rect
 
-            self._set_loc_at_by_axis(locx, 'x', rect0)
-            self._set_loc_at_by_axis(locy, 'y', rect0)
-
-            return
-
-        assert len(loc)==2, \
-            'only allow 2 floats for `loc` in axis %s' % axis
-        v0, v1=loc
-
-        pp0=rect0.get_point(axis, 0)
-        pp1=rect0.get_point(axis, -1)
-        pw=pp1-pp0
-
-        p0=self.get_point(axis, 0)
-        p1=self.get_point(axis, -1)
-
-        manager=self.get_manager()
-        manager._add_lncomb(p0-pp0, v0*pw)
-        manager._add_lncomb(p1-pp0, v1*pw)
+        return prect
 
     ## set all dists ratios
-    def set_grid_ratios(self, loc=0.1, origin_upper=False,
+    def set_grid_ratios(self, loc=0.1, locing='wh', locunits=None,
+                            origin_upper=False,
                             ratios_w=1, ratios_h=1,
                             ratios_wspace=None, ratios_hspace=None,
                             ratio_wh=None):
@@ -2111,14 +2513,8 @@ class RectGrid:
             If all setted, rects of grid should be fixed relative to parent rect
 
             Parameters:
-                loc: float, [x0, w] or [x0, y0, w, h]
-                    rectangle of whole axes
-                    in unit of fraction in figure
-
-                    if float, means all margin
-                        equal to `[loc, loc, 1-2*loc, 1-2*loc]`
-
-                    if [x0, w], means y0, h = x0, w
+                loc, locing, locunits, at: args to set location at parent
+                    see `RectGrid.set_loc` for detail
 
                 origin_upper: bool, default False
                     whether the index is given with origin in upper
@@ -2128,7 +2524,7 @@ class RectGrid:
 
                 ratios_w, ratios_h: None, float, array of float
                     ratios of width/height of rects in grid relative to origin rect
-                    
+
                     if None, not set
 
                     if float, it means ratios of other rects to origin rect
@@ -2152,47 +2548,40 @@ class RectGrid:
                     if (None, r), set for whole rect
         '''
         # location of grid
-        if isinstance(loc, numbers.Number):
-            x0=y0=loc
-            w=h=1-2*loc
-        elif len(loc)==2:
-            x0, w=y0, h=loc
-        else:
-            x0, y0, w, h=loc
-        self.set_loc_at([x0, y0, w, h], locing='wh')
-    
+        self.set_loc(loc, at='parent', locing=locing, locunits=locunits)
+
         # ratio of widths/heights with respect to axes[0, 0] at left-bottom
         if ratios_w is not None:
             self.set_dists_ratio(ratios_w, 'width', origin_upper=origin_upper)
-    
+
         if ratios_h is not None:
             self.set_dists_ratio(ratios_h, 'height', origin_upper=origin_upper)
-    
+
         ## ratio of wspace/hspace with respect to axes[0, 0]
         rect0=self[-1, 0] if origin_upper else self[0, 0]
         if ratios_wspace is not None:
             self.set_seps_ratio_to(rect0.width, ratios_wspace,
                     axis='x', origin_upper=origin_upper)
-    
+
         if ratios_hspace is not None:
             self.set_seps_ratio_to(rect0.height, ratios_hspace,
                     axis='y', origin_upper=origin_upper)
-    
+
         ## ratio of w/h
         if ratio_wh is not None:
             if isinstance(ratio_wh, numbers.Number):
                 ind=(-1, 0) if origin_upper else (0, 0)
             else:
                 ind, ratio_wh=ratio_wh
-    
+
             if ind is None:
                 region=self
             else:
                 region=self.get_rect(ind)
-    
+
             manager=self._get_manager()
             manager.set_ratio_to([region.width, region.height], [ratio_wh, 1])
-    
+
     ## properties
     for k_ in _GROUPS_DIST:
         doc_='''
@@ -2261,25 +2650,25 @@ class RectGrid:
             Parameters:
                 rects: str {'all', 'row', 'col'}, or collections of int
                     specify in which rects to create axes
-    
+
                     axes returned would be same nested structure
-    
+
                 origin_upper: bool, default False
                     whether the index is given with origin in upper
-    
+
                     if True, order of axes starts from upper-left corner
-    
+
                 sharex, sharey: bool, or str {'all', 'row', 'col'}, or list of array of int
                     specify rects to share x/y-axis
-    
+
                 return_mat: bool, default: True
                     whether to return result as a matrix, with type np.ndarray
-    
+
                     it works only when `rects` in {'row', 'col'}
-    
+
                 squeeze: bool, default: True
                     whether to squeeze array if `nrows==1` or `ncols==1`
-    
+
                     it works only when `return_mat` works and True
         '''
 
@@ -2296,11 +2685,11 @@ class RectGrid:
             if type(sharey) is bool:
                 sharey='all'
             kws1['sharey']=self.get_rects(sharey)
-    
+
         # create axes
         manager=self._get_manager()
         fig, axes=manager.create_axes_in_rects(rects, **kws1, **kwargs)
-    
+
         ## to matrix
         if isarr_rects and return_mat:
             axes=np.asarray(axes)
@@ -2308,7 +2697,7 @@ class RectGrid:
                 axes=np.ravel(axes)
                 if len(axes)==1:
                     axes=axes[0]
-    
+
         return fig, axes
 
     # to string
@@ -3330,7 +3719,7 @@ def check_axis(axis):
 class SetterList(list):
     '''
         a special list with rewrittn `__setitem__`
-        
+
         element must method `set_to`
             when setitem, `set_to` would be called
     '''

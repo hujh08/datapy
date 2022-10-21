@@ -15,7 +15,9 @@ __all__ = ['get_figaxes_grid', 'get_figaxes_in_axes',
            'get_figaxes_joint', 'get_figaxes_residual']
 
 # axes in grid
-def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], at=None, figsize=None,
+def get_figaxes_grid(nrows=1, ncols=1,
+                        loc=[0.1, 0.8], locing='wh', locunits=None,
+                        at=None, figsize=None,
                         rects='row', origin_upper=False,
                         sharex=False, sharey=False,
                         return_mat=True, squeeze=True,
@@ -30,15 +32,9 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], at=None, figsize=None,
                 number of rows/cols in grid
                 ny, nx
 
-            loc: float, [x0, w] or [x0, y0, w, h]
-                location of whole rectangle covering axes grid
-                    in unit of fraction in figure
-                        or other rect given by `at`
-
-                if float, means all margin
-                    equal to `[loc, loc, 1-2*loc, 1-2*loc]`
-
-                if [x0, w], means y0, h = x0, w
+            
+            loc, locing, locunits, at: args to set location at parent
+                see `RectGrid.set_loc` for detail
 
             at: None, `plt.figure`, `plt.Axes`, `Rect`
                 where to create the axes
@@ -79,7 +75,7 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], at=None, figsize=None,
 
             ratios_w, ratios_h: None, float, array of float
                 ratios of width/height of rects in grid relative to origin rect
-                
+
                 if None, not set
 
                 if float, it means ratios of other rects to origin rect
@@ -119,7 +115,8 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], at=None, figsize=None,
             raise TypeError(f'unexpected type for `at`: {type(at)}')
 
     # constraints
-    grid.set_grid_ratios(loc=loc, origin_upper=origin_upper,
+    grid.set_grid_ratios(loc=loc, locing=locing, locunits=locunits,
+                            origin_upper=origin_upper,
                             ratios_w=ratios_w, ratios_h=ratios_h,
                             ratios_wspace=ratios_wspace, ratios_hspace=ratios_hspace,
                             ratio_wh=ratio_wh)
@@ -133,12 +130,12 @@ def get_figaxes_grid(nrows=1, ncols=1, loc=[0.1, 0.8], at=None, figsize=None,
                                 return_mat=return_mat, squeeze=squeeze, style=style)
 
 ## create subplots in existed axes
-def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], replace=False,
-                            **kwargs):
+def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], locing='wh',
+                            replace=False, **kwargs):
     '''
         create subplots in existed axis
 
-        :param loc: location in axes
+        :param loc, locing: location in axes
 
         :param replace: bool, default False
             whether to remove the old given `axes`
@@ -155,7 +152,8 @@ def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], replace=False,
                 ratio_wh=None
     '''
     # create axes
-    _, axes1=get_figaxes_grid(nrows=nrows, ncols=ncols, loc=loc, at=axes, **kwargs)
+    _, axes1=get_figaxes_grid(nrows=nrows, ncols=ncols, loc=loc, locing=locing,
+                                at=axes, **kwargs)
 
     if replace:
         axes.remove()
@@ -165,7 +163,8 @@ def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], replace=False,
 ## frequently-used style of axes
 
 ### for joint plot
-def get_figaxes_joint(loc=[0.1, 0.8], at=None, ratio_w=0.1, ratio_h=None, ratio_wh=None,
+def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
+                            ratio_w=0.1, ratio_h=None, ratio_wh=None,
                             ratio_wspace=0.01, ratio_hspace=None,
                             **kwargs):
     '''
@@ -175,11 +174,7 @@ def get_figaxes_joint(loc=[0.1, 0.8], at=None, ratio_w=0.1, ratio_h=None, ratio_
                 axx, axy: for 1d plot
 
         Parameters:
-            loc: [x0, w] or [x0, y0, w, h]
-                rectangle of whole axes
-                in unit of fraction in figure
-
-                if [x0, w], means y0, h = x0, w
+            loc, locing: args to determine location in axes
 
             ratio_w, ratio_h: float, or None for `ratio_h`
                 ratio of width/height for 1d x/y plot to 2d axes
@@ -188,7 +183,7 @@ def get_figaxes_joint(loc=[0.1, 0.8], at=None, ratio_w=0.1, ratio_h=None, ratio_
 
             ratio_wh: None or float
                 ratio w/h for 2d axes
-            
+
             ratio_wspace, ratio_hspace: float, or None for `ratio_hspace`
                 ratio of width/height of seps to 2d axes
 
@@ -212,7 +207,8 @@ def get_figaxes_joint(loc=[0.1, 0.8], at=None, ratio_w=0.1, ratio_h=None, ratio_
         ratio_wh=(i2d, ratio_wh)  # aspect for 2d axes
 
     # create fig, axes
-    fig, (ax, axx, axy)=get_figaxes_grid(2, 2, loc=loc, at=at, origin_upper=False,
+    fig, (ax, axx, axy)=get_figaxes_grid(2, 2, loc=loc, locing=locing,
+                            at=at, origin_upper=False,
                             ratios_w=ratio_w, ratios_h=ratio_h,
                             ratio_wh=ratio_wh,
                             ratios_wspace=ratio_wspace, ratios_hspace=ratio_hspace,
@@ -226,7 +222,8 @@ def get_figaxes_joint(loc=[0.1, 0.8], at=None, ratio_w=0.1, ratio_h=None, ratio_
     return fig, (ax, axx, axy)
 
 ### for residual plot
-def get_figaxes_residual(ncols=1, loc=[0.1, 0.8], at=None, sharex='col', sharey=False,
+def get_figaxes_residual(ncols=1, loc=[0.1, 0.8], locing='wh', at=None,
+                                sharex='col', sharey=False,
                                 ratios_w=1, ratio_h=0.5, ratio_wh=None,
                                 ratios_wspace=0.01, ratio_hspace=0.01,
                                 **kwargs):
@@ -242,11 +239,7 @@ def get_figaxes_residual(ncols=1, loc=[0.1, 0.8], at=None, sharex='col', sharey=
 
                 `nrows` is fixed to 2
 
-            loc: [x0, w] or [x0, y0, w, h]
-                rectangle of whole axes
-                in unit of fraction in figure
-
-                if [x0, w], means y0, h = x0, w
+            loc, locing: args to determine location in axes
 
             ratios_w: float, or array of float
                 ratios of widths relative to that of origin 2d axes
@@ -256,11 +249,12 @@ def get_figaxes_residual(ncols=1, loc=[0.1, 0.8], at=None, sharex='col', sharey=
 
             ratio_wh: None or float
                 ratio w/h for 2d axes `ax`
-            
+
             ratios_wspace, ratio_hspace: same as `ratios_w`, `ratio_h`
                 ratio of width/height of seps to origin 2d axes
     '''
-    fig, axes=get_figaxes_grid(nrows=2, ncols=ncols, loc=loc, at=at, origin_upper=True,
+    fig, axes=get_figaxes_grid(nrows=2, ncols=ncols, loc=loc, locing=locing,
+                            at=at, origin_upper=True,
                             ratios_w=ratios_w, ratios_h=[1, ratio_h],
                             ratio_wh=ratio_wh,
                             ratios_wspace=ratios_wspace, ratios_hspace=ratio_hspace,
