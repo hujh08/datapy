@@ -48,12 +48,12 @@ def set_rc_for_tex(width, fontsize, height=None, unit='pt_tex'):
 
         :param height: None or float
             often textheight
-            if None, use `width`*2
+            if None, use `width`/0.618  (golden ratio)
 
         use `plt.rcdefaults()` to restore default plt.rcParams
     '''
     if height is None:
-        height=width*2
+        height=width/0.618
 
     # figsize
     u=convert_unit(unit, dest='inch')
@@ -110,6 +110,9 @@ def set_rc_for_mnras(twocol=False, scale=1):
     fontsize=8.5  # fontsize of figure caption
 
     width=textwidth if twocol else columnwidth
+
+    rhw=textheight/textwidth
+    height=width*rhw
 
     set_rc_for_tex(width=width*scale, fontsize=fontsize,
                    height=textheight, unit='pt_tex')
