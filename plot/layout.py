@@ -43,7 +43,8 @@ from matplotlib.axes import Axes
 from matplotlib import font_manager
 
 from .linear import LinearManager, LnComb
-from ._tools_layout import map_to_nested, squeeze_nested, confirm_arg_in, Units
+from ._tools_layout import map_to_nested, squeeze_nested, confirm_arg_in
+from .size import Units
 from ._tools_class import add_proxy_method
 from .params import params_create_axes
 
@@ -192,7 +193,7 @@ class RectManager:
 
     # size unit
     _UNITS=set(Units.keys())
-    _UNITS.update(['px', 'pixel', 'pts'])
+    _UNITS.update(['px', 'pixel'])
 
     _VAR_INV_DPI='idp'   # var for inverse of 'dpi'
 
@@ -215,9 +216,7 @@ class RectManager:
             'only support units: %s' % str(self._UNITS)
 
         # convert alias
-        if unit=='pts':
-            unit='points'
-        elif unit=='px':
+        if unit=='px':
             unit='pixel'
 
         # construct LnComb
@@ -428,13 +427,16 @@ class RectManager:
         '''
         return self._vars.eval_bounds_of_lncomb(lncomb)
 
-    def _eval_ratio_of_lncombs(self, t0, t1):
+    def _eval_ratio_of_lncombs(self, t0, t1, allow_kb=False):
         '''
             evaluate ratio of two terms, t0/t1
+            if `allow_kb`
+                return k, b, satisfying
+                    t0 = k*t1 + b
 
             if not determined, return None
         '''
-        return self._vars.eval_ratio_of_lncombs(t0, t1)
+        return self._vars.eval_ratio_of_lncombs(t0, t1, allow_kb=allow_kb)
 
     ## user method
     def eval(self, t):
@@ -452,11 +454,11 @@ class RectManager:
         '''
         return self._eval_bounds_of_lncomb(t)
 
-    def eval_ratio(self, t1, t2):
+    def eval_ratio(self, t1, t2, **kwargs):
         '''
-            eval t1/t2
+            eval t1/t2 or k, b in t1=k*t2+b (kwarg `allow_kb`)
         '''
-        return self._eval_ratio_of_lncombs(t1, t2)
+        return self._eval_ratio_of_lncombs(t1, t2, **kwargs)
 
     def set_equal(self, t0, *args):
         '''
@@ -624,12 +626,12 @@ class RectManager:
 
         return w, h
 
-    def eval_wh_ratio(self):
+    def eval_wh_ratio(self, **kwargs):
         '''
-            evaluate w/h
+            evaluate w/h, or k, b for w=k*h+b
         '''
         root=self._root_rect
-        return self.eval_ratio(root.width, root.height)
+        return self.eval_ratio(root.width, root.height, **kwargs)
 
     ## dpi
     def set_dpi(self, dpi):
@@ -805,14 +807,16 @@ class RectManager:
                 'only allow float for `figsize`'
 
         # ratio w/h eval
-        k=self.eval_wh_ratio()
-        if k is None:
+        kb=self.eval_wh_ratio(allow_kb=True)
+        if kb is None:
             root.set_width(w)
-            root.set_height(h)
-        elif w>k*h:
             root.set_height(h)
         else:
-            root.set_width(w)
+            k, b=kb
+            if w>k*h+b:
+                root.set_height(h)
+            else:
+                root.set_width(w)
 
     def _set_grps_share_axis(self, axis, grps=None, ignore_nonexists=True):
         '''
@@ -3574,15 +3578,16 @@ class LineSeg1D:
         return self._get_manager()\
                    ._eval_bounds_of_lncomb(self)
 
-    def _eval_ratio_to(self, d):
+    def _eval_ratio_to(self, d, **kwargs):
         '''
             evaluate ratio to another dist or other LnComb-like,
                 self/d
+                or k, b for self=k*d+b
 
             if not determined, return None
         '''
         return self._get_manager()\
-                   ._eval_ratio_of_lncombs(self, d)
+                   ._eval_ratio_of_lncombs(self, d, **kwargs)
 
     ## arithmetics
     def __neg__(self):
@@ -3660,13 +3665,13 @@ class LineSeg1D:
         '''
         return self._eval_bounds()
 
-    def eval_ratio_to(self, d):
+    def eval_ratio_to(self, d, **kwargs):
         '''
             evaluate ratio to another dist or other LnComb-like,
-                self/d
+                self/d or k, b for self=k*d+b
             if not determined, return None
         '''
-        return self._eval_ratio_to(d)
+        return self._eval_ratio_to(d, **kwargs)
 
     @property
     def name(self):

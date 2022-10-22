@@ -108,11 +108,3 @@ def confirm_arg_in(arg, valids, name=None):
     if arg not in valids:
         raise ValueError(
             'only allow %s in %s' % (name, repr(valids)))
-
-# Unit
-Units=dict(
-    inches=1,
-    points=1/72,  # In typography, a point is 1/72 inches
-    cm=1/2.54,
-    )
-Units['mm']=0.1*Units['cm']

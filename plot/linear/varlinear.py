@@ -262,9 +262,12 @@ class LinearManager:
 
         return c
 
-    def eval_ratio_of_lncombs(self, t0, t1):
+    def eval_ratio_of_lncombs(self, t0, t1, allow_kb=False):
         '''
             return ratio of linear combinations, t0/t1
+            if `allow_kb`
+                return k, b, satisfying
+                    t0 = k*t1 + b
 
             if not constant ratio, return None
         '''
@@ -292,23 +295,36 @@ class LinearManager:
         # compute ratio
         ksc0, ksc1=map(np.asarray, [[*ks0, c0], [*ks1, c1]])
 
-        inzs0=self._comp.inds_nonzero(ksc0)
-        inzs1=self._comp.inds_nonzero(ksc1)
+        inzs0=self._comp.inds_nonzero(ksc0[:-1])
+        inzs1=self._comp.inds_nonzero(ksc1[:-1])
         inzs=[*inzs0, *inzs1]
 
         if not inzs:  # all zeros
             ratios=(c0, c1)  # ratio: c0/c1
+            if allow_kb:
+                b=0
         else:
             i=inzs[-1]
             k0, k1=ksc0[i], ksc1[i]
 
+            diffs=k1*ksc0-k0*ksc1  # k1*t0 - k0*t1
+
+            if allow_kb:
+                b=diffs[-1]/k1
+                diffs=diffs[:-1]
+
             # not ratio
-            if not self._comp.all_zeros(k1*ksc0-k0*ksc1):
+            if not self._comp.all_zeros(diffs):
                 return None
 
             ratios=(k0, k1)
 
-        return ratios[0]/ratios[1]
+        k=ratios[0]/ratios[1]
+
+        if allow_kb:
+            return k, b
+
+        return k
 
     ## eval bounds
     def eval_bounds_of_lncomb(self, lncomb):
