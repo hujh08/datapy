@@ -4,6 +4,8 @@
     frequently used tools in pandas
 '''
 
+import collections
+
 import numpy as np
 import pandas as pd
 
@@ -39,12 +41,27 @@ def sort_index_by_list(df, klist, **kwargs):
     fkey=_list_to_sortkey(klist)
     return df.sort_index(key=fkey, **kwargs)
 
-def sort_values_by_key(df, by, key=None, **kwargs):
+def sort_values_by_key(df, by, key=None, vectorized=False, **kwargs):
     '''
-        sort more flexible parameter for `key`,
-            that is dict, list
+        sort values by given key
+
+        :param key: callable, dict, Sequence, 1d np.ndarray
+            if callable and not `vectorized`,
+                it will apply to each element in Index, instead whole object
     '''
+    key=_norm_sort_key(key, vectorized=vectorized)
     return df.sort_values(by, key=_norm_sort_key(key), **kwargs)
+
+def sort_index_by_key(df, key, vectorized=False, **kwargs):
+    '''
+        sort index by given key
+
+        :param key: callable, dict, Sequence, 1d np.ndarray
+            if callable and not `vectorized`,
+                it will apply to each element in Index, instead whole object
+    '''
+    key=_norm_sort_key(key, vectorized=vectorized)
+    return df.sort_index(key=np.vectorize(key), **kwargs)
 
 ## auxiliary functions
 def _list_to_sortkey(klist):
@@ -55,9 +72,13 @@ def _list_to_sortkey(klist):
     maxi=len(klist)  # max index for non-specified key
     return np.vectorize(lambda t: kmap.get(t, maxi))
 
-def _norm_sort_key(key):
+def _norm_sort_key(key, vectorized=False):
     '''
         normalize value for `key` in `sort_values_by_key`
+
+        :param key: callable, dict, Sequence, 1d np.ndarray
+            if callable and not `vectorized`,
+                it will apply to each element in Index, instead whole object
     '''
     if isinstance(key, dict):
         fkeys={k: _norm_sort_key(v) for k, v in key.items()}
@@ -68,8 +89,20 @@ def _norm_sort_key(key):
             return s
         return sortkey_dict
 
-    if isinstance(key, list):
+    if isinstance(key, collections.abc.Sequence):
         return _list_to_sortkey(key)
+
+    if isinstance(key, np.ndarray):
+        if key.ndim!=1:
+            raise ValueError('only allow 1d `np.ndarray` as `key`')
+        return _list_to_sortkey(key)
+
+    if not callable(key):
+        s='only allow callable, dict, Sequence, or 1d ndarray as `key`'
+        raise ValueError(s)
+
+    if not vectorized:
+        return np.vectorize(key)
 
     return key
 
@@ -118,6 +151,11 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
             y1  v01   v11
 
         useful for df with product-type of index
+
+        :param xkey, ykey: None, or callable, dict, Sequence, 1d np.ndarray
+            key to sort xcol/ycol
+
+            see `sort_index_by_key` for detail
     '''
     df=df.reset_index()[[xcol, ycol, vcol]]
     if keep_dtype:
@@ -139,9 +177,9 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
 
     # sort index
     if xkey is not None:
-        dftab=dftab.sort_index(key=np.vectorize(xkey), axis=1)
+        dftab=sort_index_by_key(dftab, key=xkey, axis=1)
     if ykey is not None:
-        dftab=dftab.sort_index(key=np.vectorize(ykey), axis=0)
+        dftab=sort_index_by_key(dftab, key=ykey, axis=0)
 
     # dtype
     if keep_dtype:
@@ -153,8 +191,9 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
     return dftab
 
 # statistic of df
-def df_count_by_group(df, ccol, hcol, vcol, fillna=0,
-                         sort_hcol=None, sort_vcol=None):
+def df_count_by_group(df, hcol, vcol, fillna=0,
+                         sort_hcol=None, sort_vcol=None,
+                         colname_count='_count'):
     '''
         count df in group of two columns
         output a 2d table
@@ -163,29 +202,30 @@ def df_count_by_group(df, ccol, hcol, vcol, fillna=0,
             df: dataframe
                 data to count
 
-            ccol: str
-                name to count
-
             hcol: str
                 name for horizontal axis of output table
 
             vcol: str
                 name for vertical axis of output table
 
-            sort_hcol, sort_vcol: list
-                list to sort hcol or vcol
+            sort_hcol, sort_vcol: None, or callable, dict, Sequence, 1d np.ndarray
+                key to sort hcol or vcol
+
+                see `sort_index_by_key` for detail
+
+            colname_count: str
+                column name for count result, use '_count' by default
+                    must be different with `hcol` and `vcol`
+
+                not affect result table
     '''
     df_cnt=df.groupby([hcol, vcol])\
-             .agg({ccol: 'count'})\
+             .size()\
+             .to_frame(name=colname_count)\
              .reset_index()
 
-    tab=df_to_2dtab(df_cnt, hcol, vcol, ccol, fillna=fillna)
-
-    if sort_hcol is not None:
-        tab=sort_index_by_list(tab, sort_hcol, axis=1)
-
-    if sort_vcol is not None:
-        tab=sort_index_by_list(tab, sort_vcol, axis=0)
+    tab=df_to_2dtab(df_cnt, hcol, vcol, colname_count, fillna=fillna,
+                        xkey=sort_hcol, ykey=sort_vcol)
 
     return tab
 
