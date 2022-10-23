@@ -6,12 +6,12 @@
 
 import os
 
-__all__=['join_parent_with_sub']
+__all__=['find_sub_in_parent']
 
 # parent path containing given sub file
-def join_parent_with_sub(sub, return_rel=True, find_all=False):
+def find_sub_in_parent(sub, return_rel=True, find_all=False):
     '''
-        find parent path of PWD containing given `sub`
+        find `sub` in parent path of PWD
             and then join them
 
         return:
