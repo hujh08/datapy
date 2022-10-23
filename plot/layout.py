@@ -1765,10 +1765,10 @@ class RectGrid:
             set value(s) for collection of dists
 
             Parameters:
-                vals: float, dict, or list of None, float, dict or list of args
+                vals: float, dict, LnComb-like object, or list of None, float, arg-like scalar
                     value(s) to set
 
-                    if float or dict, expand to `[v]*n` for n = num of dists
+                    if float, dict or LnComb-like obj, expand to `[v]*n` for n = num of dists
 
                     if list, must has same len with num of dists
                         elements could be of None, float, dict or list of args
@@ -1796,7 +1796,9 @@ class RectGrid:
         n=len(dists)
 
         # values
-        if isinstance(vals, numbers.Number) or isinstance(vals, dict):
+        if isinstance(vals, numbers.Number) or \
+           isinstance(vals, dict) or \
+           hasattr(vals, 'to_lncomb'):
             vals=[vals]*n
         else:
             vals=list(vals)
