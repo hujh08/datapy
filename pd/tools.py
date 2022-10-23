@@ -193,7 +193,7 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
 # statistic of df
 def df_count_by_group(df, hcol, vcol, fillna=0,
                          sort_hcol=None, sort_vcol=None,
-                         colname_count='_count'):
+                         colname_count='_count', **kwargs):
     '''
         count df in group of two columns
         output a 2d table
@@ -224,10 +224,8 @@ def df_count_by_group(df, hcol, vcol, fillna=0,
              .to_frame(name=colname_count)\
              .reset_index()
 
-    tab=df_to_2dtab(df_cnt, hcol, vcol, colname_count, fillna=fillna,
-                        xkey=sort_hcol, ykey=sort_vcol)
-
-    return tab
+    return df_to_2dtab(df_cnt, hcol, vcol, colname_count, fillna=fillna,
+                        xkey=sort_hcol, ykey=sort_vcol, **kwargs)
 
 # concat along index
 def concat_dfs(dfs, mcol=None, marks=None, ignore_index=True):
