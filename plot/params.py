@@ -30,7 +30,7 @@ def params_create_axes(style):
     raise ValueError('unexpected style: \'%s\'' % style)
 
 # set rcParams for figure in Tex
-def set_rc_for_tex(width, fontsize, height=None, unit='pt_tex'):
+def set_rc_for_tex(width, fontsize, height=None, ratio_wh=0.618, unit='pt_tex'):
     r'''
         set rcParams for figure in Tex
             mainly figsize and fontsize
@@ -46,14 +46,20 @@ def set_rc_for_tex(width, fontsize, height=None, unit='pt_tex'):
             `\the\columnwidth`
             `\the\fontdimen6\font`
 
+        :param ratio_wh: float
+            ratio w/h
+            use 0.618 as default (golden ratio)
+
+            it works only when `height` is None
+
         :param height: None or float
             often textheight
-            if None, use `width`/0.618  (golden ratio)
+            if None, use `width/ratio_wh`
 
         use `plt.rcdefaults()` to restore default plt.rcParams
     '''
     if height is None:
-        height=width/0.618
+        height=width/ratio_wh
 
     # figsize
     u=convert_unit(unit, dest='inch')
@@ -88,7 +94,7 @@ def set_rc_for_tex_cls(texcls, *args, **kwargs):
     return func(*args, **kwargs)
 
 @_register_rcset_texcls('mnras')
-def set_rc_for_mnras(twocol=False, scale=1):
+def set_rc_for_mnras(twocol=False, scale=1, ratio_wh=None):
     r'''
         set for `mnras` document class
 
@@ -104,15 +110,21 @@ def set_rc_for_mnras(twocol=False, scale=1):
 
             if True, use `scale*textwidth`
             otherwise, use `scale*columnwidth`
+
+        :param ratio_wh: None or float
+            ratio w/h
+            if None, use `textwidth/textheight` as default
     '''
     textwidth, columnwidth=508, 244  # in unit Tex pt
     textheight=682
     fontsize=8.5  # fontsize of figure caption
 
     width=textwidth if twocol else columnwidth
+    width=width*scale
 
-    rhw=textheight/textwidth
-    height=width*rhw
+    if ratio_wh is None:
+        ratio_wh=textwidth/textheight
+    height=width/ratio_wh
 
-    set_rc_for_tex(width=width*scale, fontsize=fontsize,
-                   height=textheight, unit='pt_tex')
+    set_rc_for_tex(width=width, fontsize=fontsize,
+                   height=height, unit='pt_tex')
