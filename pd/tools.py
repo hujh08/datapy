@@ -192,8 +192,10 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
 
 # statistic of df
 def df_count_by_group(df, hcol, vcol, fillna=0,
-                         sort_hcol=None, sort_vcol=None,
-                         colname_count='_count', **kwargs):
+                        normalize=False, sort_cnt=False,
+                        dropna_cnt=True,
+                        sort_hcol=None, sort_vcol=None,
+                        colname_count='_count', **kwargs):
     '''
         count df in group of two columns
         output a 2d table
@@ -218,9 +220,13 @@ def df_count_by_group(df, hcol, vcol, fillna=0,
                     must be different with `hcol` and `vcol`
 
                 not affect result table
+
+            normalize, sort_cnt, dropna_cnt:
+                args for `df.value_counts`
     '''
-    df_cnt=df.groupby([hcol, vcol])\
-             .size()\
+    df_cnt=df.value_counts(subset=[hcol, vcol],
+                           normalize=normalize, sort=sort_cnt,
+                           dropna=dropna_cnt, ascending=False)\
              .to_frame(name=colname_count)\
              .reset_index()
 
