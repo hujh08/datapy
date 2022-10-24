@@ -128,6 +128,7 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
 
             levels: None, int, or array of numbers
                 quantiles of contours to plot
+                    fraction of points outside of countour
 
                 if None: use levels=10
                 if int n: use `[1/n, 2/n, ..., (n-1)/n]`

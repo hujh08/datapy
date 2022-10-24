@@ -180,7 +180,11 @@ def calc_density_map_2d(xs, ys, bins=None,
     return dens, (xcents, ycents)
 
 def quants_to_levels(weights, quants):
-    # list of quantiles to levels in density map
+    '''
+        list of quantiles to levels in density map
+
+        `quantile` means fraction of points outside of countour
+    '''
     
     quants=np.asarray(quants)
 
@@ -188,17 +192,11 @@ def quants_to_levels(weights, quants):
     weights=np.ravel(weights)
     assert np.all(weights>=0)
 
-    # ## drop zero
-    # weights=weights[weights>0]
-    # assert len(weights)
-
     weights=np.sort(weights)[::-1]
     ws_cum=np.cumsum(weights)/np.sum(weights)
 
     # compute levels
     levels=np.interp(1-quants, ws_cum, weights)
-    # inds=np.searchsorted(ws_cum, 1-quants)
-    # levels=np.take(weights, inds, mode="clip")
 
     return levels
 
