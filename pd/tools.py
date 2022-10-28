@@ -9,6 +9,13 @@ import collections
 import numpy as np
 import pandas as pd
 
+__all__=['xs_by_dict', 'df_loc_on_col',
+         'sort_index_by_list', 'sort_values_by_key', 'sort_index_by_key',
+         'print_df', 'print_tab',
+         'has_na',
+         'df_to_2dtab', 'df_count_by_group',
+         'concat_dfs', 'merge_dfs', 'merge_dfs_on_ind']
+
 # xs
 def xs_by_dict(df, axis=0, drop_level=True, **kwargs):
     '''
