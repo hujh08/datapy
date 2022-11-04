@@ -11,6 +11,7 @@ import pandas as pd
 
 __all__=['xs_by_dict', 'df_loc_on_col',
          'sort_index_by_list', 'sort_values_by_key', 'sort_index_by_key',
+         'mv_cols_head',
          'print_df', 'print_tab',
          'has_na',
          'df_to_2dtab', 'df_count_by_group',
@@ -112,6 +113,26 @@ def _norm_sort_key(key, vectorized=False):
         return np.vectorize(key)
 
     return key
+
+# adopt columns order
+def mv_cols_head(df, cols):
+    '''
+        move given column to head
+            ignore non-existed column
+    '''
+    assert df.columns.is_unique, 'non-unique column names'
+    
+    cols_df=list(df.columns)
+
+    head=[]
+    for c in cols:
+        if c not in cols_df:
+            continue
+
+        cols_df.remove(c)
+        head.append(c)
+
+    return df[head+cols_df]
 
 # print
 def print_df(df, reset_index=False, **kwargs):
