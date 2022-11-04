@@ -9,8 +9,8 @@ import numbers
 
 import numpy as np
 
-from .tools_poly import (get_multidegs, sort_degs)
-from .tools import _align_arrs_shape
+from ._tools import (get_multidegs, sort_degs,
+                     align_arrs_shape)
 
 class NDPoly:
     '''
@@ -109,6 +109,10 @@ class NDPoly:
 
     def copy(self):
         return type(self)(self._degs, coeffs=self._coeffs)
+
+    @property
+    def coeffs(self):
+        return list(self._coeffs)
 
     # reduce terms
     def reduce_like_terms(self):
@@ -230,7 +234,7 @@ class NDPoly:
         '''
             adopt coeffs by fit to (*xs, ys)
         '''
-        ys, *xs=map(np.ravel, _align_arrs_shape((ys, *xs)))
+        ys, *xs=map(np.ravel, align_arrs_shape((ys, *xs)))
         n=len(ys)
 
         xterms=[]
