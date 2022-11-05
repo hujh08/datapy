@@ -1,9 +1,11 @@
 # module to plot data
 
 from .layout import RectManager
-from .plot import *
 from .figax import *
 from .params import *
+
+from .plot import *
+from .markline import *
 from .curvefit import *
 
 # starting point for layout

@@ -10,7 +10,6 @@ import numbers
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
-from .transforms import yFuncTransFormFromAxes
 from ._tools_plot import filter_by_lim, calc_density_map_2d, quants_to_levels
 from .colors import get_next_color_in_cycle
 from .legend import handler_nonfill, update_handler_for_contour
@@ -18,8 +17,7 @@ from .legend import handler_nonfill, update_handler_for_contour
 __all__=['plot_hist', 'plot_cumul',
          'plot_2d_hist', 'plot_2d_contour', 'plot_2d_scatter',
          'plot_2d_bins',
-         'plot_2d_joint',
-         'add_fcurve', 'add_line', 'add_dline']
+         'plot_2d_joint']
 
 # distribution plot
 
@@ -477,35 +475,3 @@ def plot_2d_joint(axs, xs, ys,
 
         axx.set_ylim([h0, h1])
         axy.set_xlim([h0, h1])
-
-# decorate
-
-## mark line
-def add_fcurve(ax, func, xscope=[0, 1], npoints=100, **kwargs):
-    '''
-        add function curve
-    '''
-    # transformation
-    trans = yFuncTransFormFromAxes(ax, func)
-
-    # points
-    x0, x1=xscope
-    xs=np.linspace(x0, x1, npoints)
-
-    # construct line
-    l,=ax.plot(xs, xs, transform=trans, **kwargs)
-
-    return l
-
-def add_line(ax, k, b, **kwargs):
-    '''
-        add line: k*x + b
-    '''
-    func=lambda x: k*x+b
-    return add_fcurve(ax, func, **kwargs)
-
-def add_dline(ax, offset=0, **kwargs):
-    '''
-        add diagnoal line with optional offset
-    '''
-    return add_line(ax, 1, offset, **kwargs)

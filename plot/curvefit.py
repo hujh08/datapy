@@ -11,7 +11,7 @@ import matplotlib.patches as mpatch
 import matplotlib.container as mcontainer
 from matplotlib.lines import Line2D as mline
 
-from .plot import add_fcurve
+from .markline import add_fcurve
 
 __all__=['add_gauss_fit']
 
