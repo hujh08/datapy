@@ -7,6 +7,7 @@ from .params import *
 from .plot import *
 from .markline import *
 from .curvefit import *
+from .patch import *
 
 # starting point for layout
 def init(*args, **kwargs):
