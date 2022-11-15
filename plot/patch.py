@@ -20,17 +20,27 @@ def _register_padder(f):
     name=f.__name__
     pname=name.split('_', maxsplit=1)[1].replace('_', ' ')
 
-    def f1(ax, *args, fill=True, **kwargs):
+    def f1(*args, fill=True, marker=None, kws_marker={}, **kwargs):
+        # fill
         if (not fill) and \
            ('fc' not in kwargs and 'facecolor' not in kwargs):
             kwargs['fc']='none'
             if 'color' not in kwargs and \
                'ec' not in kwargs and \
                'edgecolor' not in kwargs:
+                ax=args[0]
                 kwargs['ec']=get_next_color_in_cycle(ax)
         elif isinstance(fill, numbers.Number) and 'alpha' not in kwargs:
             kwargs['alpha']=fill
-        return f(ax, *args, **kwargs)
+
+        # marker of xy0
+        if marker is not None:
+            ax, (x0, y0)=args[:2]
+            if 'color' in kwargs and 'color' not in kws_marker:
+                kws_marker['color']=kwargs['color']
+            ax.scatter([x0], [y0], marker=marker, **kws_marker)
+
+        return f(*args, **kwargs)
     f1.__doc__=f.__doc__
 
     _patches[pname]=f1
@@ -58,13 +68,13 @@ def add_rect(ax, xy0, w, h, angle=0, **kwargs):
 
 # polygon
 @_register_padder
-def add_regular_polygon(ax, xy0, n, r, angle=0, **kwargs):
+def add_regular_polygon(ax, xy0, n, r, orientation=0, **kwargs):
     '''
         regular polygon
             which has vertices distributed along a cirle uniformly
                 with first vertex in right up direction
     '''
-    pgon=mpatches.RegularPolygon(xy0, n, r, orientation=angle, **kwargs)
+    pgon=mpatches.RegularPolygon(xy0, n, r, orientation=orientation, **kwargs)
     return ax.add_patch(pgon)
 
 @_register_padder
@@ -72,19 +82,27 @@ def add_polygon(ax, *args, pathby='vert', **kwargs):
     '''
         polygon specified by vertices
 
-        :param path: 'vert' or 'angle'
+        :param path: 'vert', 'angle' or 'polar'
             how the args specify polygon path
 
             if 'vert': `args` for list of xys
             if 'angle': `xy0`, `angles`, `lens`
+            if 'polar': `xy0`, `angles`, `radius`
     '''
     if pathby=='vert':
         path=path_polygon_by_verts(*args)
     elif pathby=='angle':
         kws={}
-        if 'lens' in kwargs:
-            kws['lens']=kwargs.pop('lens')
+        for k in ['orientation', 'lens']:
+            if k in kwargs:
+                kws[k]=kwargs.pop(k)
         path=path_polygon_by_angles(*args, **kws)
+    elif pathby=='polar':
+        kws={}
+        for k in ['orientation', 'radius']:
+            if k in kwargs:
+                kws[k]=kwargs.pop(k)
+        path=path_polygon_by_polar(*args, **kws)
     else:
         raise ValueError(f'unknown path construct: {pathby}')
 
@@ -106,7 +124,46 @@ def path_polygon_by_verts(*xys):
     
     return mpath.Path(verts, codes)
 
-def path_polygon_by_angles(xy0, angles, lens=1):
+def path_polygon_by_polar(xy0, angles, radius=1, orientation=0):
+    '''
+        polygon path by polar coordinates
+
+        :param angles: int, list of float
+            angles in degree relative to base direction
+                that is y-axis if `orientation==0`
+
+            if int, mean number of vertices
+
+        :param radius: float, list of float or callable
+            if float, same radius for all vertices
+            if callable, yield real radius by feeding `angles`
+    '''
+    if isinstance(angles, numbers.Number):
+        angles=np.linspace(0, 360, angles, endpoint=False)
+    else:
+        angles=np.asarray(angles)
+
+    n=len(angles)
+    assert n>=3, 'at least 3 angles specified'
+
+    thetas=(angles+orientation)*np.pi/180
+
+    # radius
+    if isinstance(radius, numbers.Number):
+        radius=[radius]*n
+    elif callable(radius):
+        radius=radius(angles)
+    radius=np.asarray(radius)
+    assert len(radius)==n, 'mismatch len between `angles` and `radius`'
+
+    # xy
+    x0, y0=xy0
+    xs=x0-radius*np.sin(thetas)
+    ys=y0+radius*np.cos(thetas)
+
+    return path_polygon_by_verts(*zip(xs, ys))
+
+def path_polygon_by_angles(xy0, angles, lens=1, orientation=None):
     '''
         polygon path by angles between edges
 
@@ -118,6 +175,11 @@ def path_polygon_by_angles(xy0, angles, lens=1):
                 use same angle for all
                     that is 360/n
 
+        :param orientation: None or float
+            orientation of first edge
+
+            if None, it's given by 0th element in `angles`
+
         :param lens: float or list of float
             lengths of edges
 
@@ -125,18 +187,25 @@ def path_polygon_by_angles(xy0, angles, lens=1):
     '''
     if isinstance(angles, numbers.Number):
         angles=[360/angles]*(angles-2)
-        angles=[0, *angles]
+        if orientation is None:
+            orientation=0
+        angles=[orientation, *angles]
+    elif orientation is not None:
+        angles=[orientation, *angles]
+
     n=len(angles)
     assert n>=2, 'at least 2 angles specified'
 
     thetas=np.cumsum(angles)*np.pi/180
 
+    # lengths
     if isinstance(lens, numbers.Number):
-        lens=[lens]*len(thetas)
-    elif len(lens)!=len(thetas):
+        lens=[lens]*n
+    elif len(lens)!=n:
         raise ValueError('num of `lens` mismatch with that of `angles`')
     lens=np.asarray(lens)
 
+    # vector of edges
     dxs=lens*np.cos(thetas)
     dys=lens*np.sin(thetas)
 
