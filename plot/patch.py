@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 
-from .colors import get_next_color_in_cycle
+from .path import ClosedPath
 
 _patches={}
 __all__=['add_patch']
@@ -22,16 +22,10 @@ def _register_padder(f):
 
     def f1(*args, fill=True, marker=None, kws_marker={}, **kwargs):
         # fill
-        if (not fill) and \
-           ('fc' not in kwargs and 'facecolor' not in kwargs):
-            kwargs['fc']='none'
-            if 'color' not in kwargs and \
-               'ec' not in kwargs and \
-               'edgecolor' not in kwargs:
-                ax=args[0]
-                kwargs['ec']=get_next_color_in_cycle(ax)
-        elif isinstance(fill, numbers.Number) and 'alpha' not in kwargs:
-            kwargs['alpha']=fill
+        kwargs['fill']=bool(fill)
+        if fill and isinstance(fill, numbers.Number):
+            if 'alpha' not in kwargs:
+                kwargs['alpha']=fill
 
         # marker of xy0
         if marker is not None:
@@ -117,12 +111,7 @@ def path_polygon_by_verts(*xys):
     n=len(xys)
     assert n>=3, 'at least 3 vertices'
 
-    verts=[*xys, xys[0]]
-
-    codes=[mpath.Path.LINETO]*(n-1)
-    codes=[mpath.Path.MOVETO, *codes, mpath.Path.CLOSEPOLY]
-    
-    return mpath.Path(verts, codes)
+    return ClosedPath(xys, closed=True)
 
 def path_polygon_by_polar(xy0, angles, radius=1, orientation=0):
     '''
@@ -214,6 +203,22 @@ def path_polygon_by_angles(xy0, angles, lens=1, orientation=None):
     ys=np.cumsum([y0, *dys])
 
     return path_polygon_by_verts(*zip(xs, ys))
+
+# path
+@_register_padder
+def add_path(ax, *verts, codes=None, closed=False, **kwargs):
+    '''
+        add path by verts
+
+        :param codes: str, path code or list of code
+            codes to create path
+
+            a special code, str 'bezier'
+                used to create bezier curve
+
+            other scalar code: LINETO, CURVE3, CURVE4
+    '''
+    pass
 
 # method to call patch drawer
 def add_patch(ax, patch, *args, **kwargs):
