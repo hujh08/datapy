@@ -11,7 +11,8 @@ import numpy as np
 import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 
-from .path import ClosedPath
+from .path import (ClosedPath, BezierPath,
+                   parse_path_segs, is_type_of_path_point)
 
 _patches={}
 __all__=['add_patch']
@@ -100,8 +101,7 @@ def add_polygon(ax, *args, pathby='vert', **kwargs):
     else:
         raise ValueError(f'unknown path construct: {pathby}')
 
-    patch=mpatches.PathPatch(path, **kwargs)
-    return ax.add_patch(patch)
+    return add_path(ax, path, **kwargs)
 
 ## path of polygon
 def path_polygon_by_verts(*xys):
@@ -206,9 +206,37 @@ def path_polygon_by_angles(xy0, angles, lens=1, orientation=None):
 
 # path
 @_register_padder
-def add_path(ax, *verts, codes=None, closed=False, **kwargs):
+def add_path(ax, *args, **kwargs):
     '''
-        add path by verts
+        add path
+
+        args: Path instance or vertices
+            if vertices, to create path
+    '''
+    if not args:
+        raise ValueError('no positional arg given')
+
+    if isinstance(args[0], mpath.Path):
+        path=args[0]
+    else:
+        # construct path
+        kws_path={} # optional args for path
+        for k in ['codes', 'closed', 'strict_codes', 'ts']:
+            if k in kwargs:
+                kws_path[k]=kwargs.pop(k)
+
+        if is_type_of_path_point(args[0]):
+            path=path_by_verts(*args, **kws_path)
+        else:
+            path=path_by_segs(*args, **kws_path)
+
+    patch=mpatches.PathPatch(path, **kwargs)
+    return ax.add_patch(patch)
+
+## methods for path
+def path_by_verts(*verts, codes=None, closed=None, **kwargs):
+    '''
+        construct path by verts
 
         :param codes: str, path code or list of code
             codes to create path
@@ -217,11 +245,41 @@ def add_path(ax, *verts, codes=None, closed=False, **kwargs):
                 used to create bezier curve
 
             other scalar code: LINETO, CURVE3, CURVE4
+
+        :param closed: None or bool
+            whether to create closed path
+
+            different for None and False
+                if None, path as `mpath.Path` instance
+                otherwise, use `ClosedPath`
     '''
-    pass
+    if closed is not None:
+        kwargs['closed']=closed
+        pclass=ClosedPath
+    else:
+        pclass=mpath.Path
+
+    if isinstance(codes, str) and codes.lower()=='bezier':
+        pclass=BezierPath
+    else:
+        kwargs['codes']=codes
+    return pclass(verts, **kwargs)
+
+def path_by_segs(*segs, **kwargs):
+    verts, codes=parse_path_segs(*segs)
+
+    # not support `closed` arg
+    closed=None
+
+    return path_by_verts(*verts, codes=codes, closed=closed, **kwargs)
 
 # method to call patch drawer
 def add_patch(ax, patch, *args, **kwargs):
+    if isinstance(patch, mpatches.Patch):
+        assert not args and not kwargs
+        return ax.add_patch(patch)
+
+    # create patch using function
     patch=patch.lower()
     if patch not in _patches:
         raise ValueError(f'only allow add patch for {list(_patches.keys())}, '
