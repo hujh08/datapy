@@ -24,7 +24,10 @@ def _register_padder(f):
 
     def f1(*args, fill=True,
                   marker=None, kws_marker={},
+                  show_control_points=False, kws_control_points={},
                   autoscale=True, **kwargs):
+        ax=args[0]
+
         # fill: support float `fill`
         kwargs['fill']=bool(fill)
         if fill and isinstance(fill, numbers.Number):
@@ -32,22 +35,37 @@ def _register_padder(f):
                 kwargs['alpha']=fill
 
         # default color in cycle
-        if 'color' not in kwargs:
-            ax=args[0]
-            kwargs['color']=get_next_color_in_cycle(ax)
+        if not kwargs['fill'] and \
+           ('color' not in kwargs and
+            'ec' not in kwargs and
+            'edgecolor' not in kwargs):
+            kwargs['edgecolor']=get_next_color_in_cycle(ax)
 
         # marker of xy0
         if marker is not None:
-            ax, (x0, y0)=args[:2]
+            x0, y0=args[1]
             if 'color' in kwargs and 'color' not in kws_marker:
                 kws_marker['color']=kwargs['color']
             ax.scatter([x0], [y0], marker=marker, **kws_marker)
 
         p=f(*args, **kwargs)
 
+        # show control points
+        if show_control_points:
+            if 'color' not in kws_control_points:
+                kws_control_points['color']=p.get_ec() if not p.fill else p.get_fc()
+            if all([k not in kws_control_points for k in ['lw', 'linewidth']]):
+                kws_control_points['lw']=p.get_lw()
+            if all([k not in kws_control_points for k in ['ls', 'linestyle']]):
+                kws_control_points['ls']=p.get_ls()
+
+            path=p.get_path()
+            for b, c in path.iter_bezier():
+                verts=b.control_points
+                add_path(ax, verts, **kws_control_points, fill=False)
+
         # auto scale of ax view
         if autoscale:
-            ax=args[0]
             ax.autoscale_view()
 
         return p
@@ -293,10 +311,15 @@ def path_by_segs(*segs, **kwargs):
 def add_patch(ax, patch, *args, **kwargs):
     '''
         new feature:
-            fill: support float `fill`
+            fill: bool or float
+                support float `fill`
                 as `alpha` of filled facecolor
             
-            marker: marker of base point, like center of circle
+            marker: None or marker str
+                marker of base point, like center of circle
+
+            show_control_points: bool
+                show control points by itering bezier
 
             autoscale: autoscale view for ax
     '''

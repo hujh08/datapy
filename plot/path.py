@@ -284,6 +284,14 @@ class BezierPath(ClosedPath):
     def control_points(self):
         return self.get_control_points()
 
+    def iter_bezier(self, **kwargs):
+        # if kwargs:
+        #     yield from super().iter_bezier(**kwargs)
+
+        #     return
+
+        yield mbezier.BezierSegment(self.control_points), None
+
     # underlying path
     def get_base_path(self):
         '''
