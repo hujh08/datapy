@@ -4,6 +4,8 @@
     curve fit to histogram
 '''
 
+import collections
+
 import numpy as np
 from scipy.optimize import curve_fit
 
@@ -49,6 +51,10 @@ def fit_gauss1d_to_data(cnts, xs):
     popt, _=curve_fit(gauss_1d, cents, cnts, p0=p0)
 
     func=lambda x: gauss_1d(x, *popt)
+
+    # to namedtuple
+    t_gauss1d=collections.namedtuple('Gauss1d', ['x0', 'sigma', 'I'])
+    popt=t_gauss1d(*popt)
 
     return func, popt
 
