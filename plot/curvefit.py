@@ -9,8 +9,8 @@ import collections
 import numpy as np
 from scipy.optimize import curve_fit
 
-import matplotlib.patches as mpatch
-import matplotlib.container as mcontainer
+import matplotlib.axes as maxes
+import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D as mline
 
 from .markline import add_fcurve
@@ -58,6 +58,7 @@ def fit_gauss1d_to_data(cnts, xs):
 
     return func, popt
 
+# data from object returned by hist plot
 def get_data_from_polygon(p):
     '''
         get cnts, edges from object returned from `hist` plot
@@ -68,7 +69,7 @@ def get_data_from_polygon(p):
     xs, ys=verts.T
 
     # stepfilled
-    backs,=np.nonzero(np.diff(xs)<0)
+    backs,=np.nonzero(np.diff(xs)<0)  # backward path
     if len(backs)>0:
         n=backs[0]+1
         xs=xs[:n]
@@ -115,36 +116,101 @@ def get_data_from_plt(p):
     '''
         get cnts, edges from object returned from `hist` plot
     '''
-    if isinstance(p, list):
-        p=p[0]
-
-    if isinstance(p, mpatch.Polygon):
+    if isinstance(p, mpatches.Polygon):
         return get_data_from_polygon(p)
 
-    assert isinstance(p, mcontainer.BarContainer), \
-           'only support `mpatch.Polygon` and `mcontainer.BarContainer`'
+    # list returned from hist plot
+    if len(p)==1 and isinstance(p[0], mpatches.Polygon):
+        return get_data_from_polygon(p[0])
+
+    # bar collection
+    if not all([isinstance(t, mpatches.Rectangle) for t in p]):
+        s='only support `mpatches.Polygon` and collection of bars'
+        raise ValueError(s)
+
     return get_data_from_bars(p)
+
+# get patches from ax
+def split_hist_patches(patches):
+    '''
+        split hist patches based on
+            - type: polygon (for step) and rectangle (for bars)
+            - fc: facecolor for bars
+    '''
+    hists=[]
+    prevfc=None  # fc of previous patch, None if not bar
+    for p in patches:
+        if isinstance(p, mpatches.Polygon):
+            hists.append([p])
+            prevfc=None
+            continue
+        elif not isinstance(p, mpatches.Rectangle):
+            # only consider Polygon and Rectangle
+            continue
+
+        # first bar in new group
+        if prevfc is None or p.get_fc()!=prevfc:
+            hists.append([p])
+            prevfc=p.get_fc()
+        else:  # same group
+            hists[-1].append(p)
+
+    return hists
+
+def get_patches_from_ax(ax, hlabel=None, hind=None):
+    '''
+        get patches of hist plot from given ax
+
+        patches in ax is first splitted to groups of hist plot,
+        based on
+            - type: polygon (for step) and rectangle (for bars)
+            - fc: facecolor for bars
+
+        if `hlabel` is given, groups with given label is selected
+
+        `hind` specify index of group in hists to return
+
+        if both `hlabel` and `hind` None, use all patches
+    '''
+    if hlabel is None and hind is None:
+        return ax.patches
+
+    hists=split_hist_patches(ax.patches)
+    if hlabel is not None:
+        hists=[g for g in hists if g[0].get_label()==hlabel]
+
+    if hind is None:
+        if len(hists)>1:
+            raise ValueError('too many hist groups found. use `hind` to specify one')
+
+        return hists[0]
+
+    return hists[hind]
 
 def add_gauss_fit(*args, **kwargs):
     '''
         add gaussian fit for hist plot
 
         2 way to call
-            add_gauss_fit(p, **kwargs)
+            add_gauss_fit(p, **kwargs)  # for p from hist plot
+            add_gauss_fit(ax, hlabel='some hist', hind=0) # use patches with given label in ax
             add_gauss_fit(ax, cnts, edges)
     '''
     if len(args)==1:
         p,=args
-        if isinstance(p, list):
-            p=p[0]
-    
-        if isinstance(p, mpatch.Polygon):
+        if isinstance(p, maxes.Axes):
+            ax=p
+
+            pkws={}
+            for k in ['hlabel', 'hind']:
+                if k in kwargs:
+                    pkws[k]=kwargs.pop(k)
+            p=get_patches_from_ax(ax, **pkws)
+
+        elif isinstance(p, mpatches.Polygon):
             ax=p.axes
-        elif isinstance(p, mcontainer.BarContainer):
-            ax=p[0].axes
         else:
-            s='only support `mpatch.Polygon` and `mcontainer.BarContainer`'
-            raise TypeError(s)
+            ax=p[0].axes
     
         cnts, edges=get_data_from_plt(p)
     else:
