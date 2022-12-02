@@ -4,9 +4,9 @@
     simple tools to handle path in file system
 '''
 
-import os
+import os, sys
 
-__all__=['find_sub_in_parent']
+__all__=['find_sub_in_parent', 'add_lib_in_parent']
 
 # parent path containing given sub file
 def find_sub_in_parent(sub, return_rel=True, find_all=False):
@@ -53,3 +53,12 @@ def find_sub_in_parent(sub, return_rel=True, find_all=False):
         return result[0]
 
     return result
+
+# add local lib path in parent dir
+def add_lib_in_parent(sub):
+    '''
+        add local lib path in parent
+    '''
+    libdir=find_sub_in_parent(sub, return_rel=True)
+    if libdir not in sys.path:
+        sys.path.append(libdir)
