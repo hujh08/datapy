@@ -169,7 +169,7 @@ def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
                             **kwargs):
     '''
         axes for joint plot of 2d data
-            return [ax, axx, axy]
+            return fig, [ax, axx, axy]
                 ax: axes for 2d
                 axx, axy: for 1d plot
 

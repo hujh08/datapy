@@ -4,6 +4,8 @@ from .layout import RectManager
 from .figax import *
 from .params import *
 
+from .colors import *
+
 from .plot import *
 from .markline import *
 from .curvefit import *

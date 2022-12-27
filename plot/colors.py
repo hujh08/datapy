@@ -11,6 +11,9 @@ import numpy as np
 import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap
 
+__all__=['get_next_color',
+         'cmap_from_colors', 'cmap_from_cpair']
+
 # color cycle
 def get_next_color_in_cycle(ax):
     '''
@@ -21,6 +24,8 @@ def get_next_color_in_cycle(ax):
     ltmp.remove()
 
     return color
+
+get_next_color=get_next_color_in_cycle
 
 def get_color_cycler(*colors):
     '''
