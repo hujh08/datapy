@@ -2108,7 +2108,7 @@ class RectGrid:
 
                     if list, its length must be equal to `nx-1` or `ny-1`
                         elements could be None or scalar
-                        if None, use no unit
+                        if None, use no unit, that means 'inches' by default
         '''
         if axis=='both':
             self.set_seps(vals, 'x', units)
@@ -2507,17 +2507,32 @@ class RectGrid:
 
         return prect
 
-    ## set all dists ratios
-    def set_grid_ratios(self, loc=0.1, locing='wh', locunits=None,
+    ## set all dists in grid
+    def set_grid_dists(self, loc=0.1, locing='wh', locunits=None,
                             origin_upper=False,
                             ratios_w=1, ratios_h=1,
-                            ratios_wspace=None, ratios_hspace=None,
+                            wspaces=0, wpunits=None,
+                            hspaces=0, hpunits=None,
                             ratio_wh=None):
         '''
-            Set ratios of distances in grid relative that of origin rect
+            Set distances in grid relative that of origin rect
 
+            =========
+            To locate axes in grid, it is enough to specify
+                loc: relative to whole axes in parent rect
+                ratios: of width/height among axes
+                ratios: between w and h of one ax, aka aspect
+                wspaces/hspaces: between nearby axes
+            among which
+                - ratios of w/h are dimensionless value
+    
+                - loc and w/hspaces are some kind of distances
+                    besides the value, they must have some unit
+                        like w/h of figure or base axes by default
+    
             If all setted, rects of grid should be fixed relative to parent rect
-
+    
+            ========
             Parameters:
                 loc, locing, locunits, at: args to set location at parent
                     see `RectGrid.set_loc` for detail
@@ -2528,6 +2543,12 @@ class RectGrid:
                     if True, order of axes starts from upper-left corner
                     otherwise, bottom-left
 
+                wspaces, wpunits: kwargs to specify wspaces
+                hspaces, hpunits: kwargs to specify hspaces
+                    value and unit for distance of wspaces/hspaces
+
+                    see `RectGrid.set_seps` for detail
+
                 ratios_w, ratios_h: None, float, array of float
                     ratios of width/height of rects in grid relative to origin rect
 
@@ -2537,13 +2558,6 @@ class RectGrid:
 
                     if array, its len should be `nx-1`, or `nx` (`ny-1`, `ny` respectively)
                         for `nx-1`, it means `[1, *ratios]`
-
-                ratios_wspace, ratios_hsapace: None, float, array of float
-                    ratios of wspace, hspace relative to origin rect
-                    Similar as `ratios_w`, `ratios_h`
-                        Except, if array, its len must be `nx-1`, `ny-1` respectively
-
-                    if None, not set
 
                 ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
                     ratio w/h for one axes or whole axes region (if given (None, int))
@@ -2556,22 +2570,19 @@ class RectGrid:
         # location of grid
         self.set_loc(loc, at='parent', locing=locing, locunits=locunits)
 
+        ## wspaces/hspaces
+        wpunits=0 if wpunits is None else wpunits  # use first rect by default
+        hpunits=0 if hpunits is None else hpunits
+
+        self.set_seps(wspaces, axis='x', units=wpunits, origin_upper=origin_upper)
+        self.set_seps(hspaces, axis='y', units=hpunits, origin_upper=origin_upper)
+
         # ratio of widths/heights with respect to axes[0, 0] at left-bottom
         if ratios_w is not None:
             self.set_dists_ratio(ratios_w, 'width', origin_upper=origin_upper)
 
         if ratios_h is not None:
             self.set_dists_ratio(ratios_h, 'height', origin_upper=origin_upper)
-
-        ## ratio of wspace/hspace with respect to axes[0, 0]
-        rect0=self[-1, 0] if origin_upper else self[0, 0]
-        if ratios_wspace is not None:
-            self.set_seps_ratio_to(rect0.width, ratios_wspace,
-                    axis='x', origin_upper=origin_upper)
-
-        if ratios_hspace is not None:
-            self.set_seps_ratio_to(rect0.height, ratios_hspace,
-                    axis='y', origin_upper=origin_upper)
 
         ## ratio of w/h
         if ratio_wh is not None:

@@ -21,20 +21,45 @@ def get_figaxes_grid(nrows=1, ncols=1,
                         rects='row', origin_upper=False,
                         sharex=False, sharey=False,
                         return_mat=True, squeeze=True,
+                        wspaces=0.01, hspaces=0.01,
+                        wpunits=None, hpunits=None,
                         ratios_w=1, ratios_h=1,
-                        ratios_wspace=0.01, ratios_hspace=0.01,
                         ratio_wh=None, style='tight grid'):
     '''
         axes in grid
 
+        =========
+        To locate axes in grid, it is enough to specify
+            loc: relative to whole axes in parent rect
+            ratios: of width/height among axes
+            ratios: between w and h of one ax, aka aspect
+            wspaces/hspaces: between nearby axes
+        among which
+            - ratios of w/h and aspect are dimensionless value
+
+            - loc and w/hspaces are some kind of distances
+                besides the value, they must have some unit
+                    like w/h of figure or base axes by default
+
+        ========
         Parameters:
             nrows, ncols: int
                 number of rows/cols in grid
                 ny, nx
 
-            
             loc, locing, locunits, at: args to set location at parent
                 see `RectGrid.set_loc` for detail
+
+                `locunits`: list of dist units
+                    3 type supported for unit: str, int, or `LnComb`-like
+                        LnComb-like: object with `to_lncomb`
+    
+                        str: 'figure', 'grid', ...
+                             'inches', 'pixel', 'points', ...
+                             'ticksep'  # a function to be called on val
+    
+                        int: ith rect in grid (0th rect given by `origin_upper`)
+                see `RectGrid.get_dist_unit` for detail
 
             at: None, `plt.figure`, `plt.Axes`, `Rect`
                 where to create the axes
@@ -53,7 +78,7 @@ def get_figaxes_grid(nrows=1, ncols=1,
             rects: str {'all', 'row', 'col'}, or collections of int
                 specify in which rects to create axes
 
-                axes returned would be same nested structure
+                axes returned would have same nested structure
 
             origin_upper: bool, default False
                 whether the index is given with origin in upper
@@ -73,6 +98,12 @@ def get_figaxes_grid(nrows=1, ncols=1,
 
                 it works only when `return_mat` works and True
 
+            wspaces, wpunits: kwargs to specify wspaces
+            hspaces, hpunits: kwargs to specify hspaces
+                value and unit for distance of wspaces/hspaces
+
+                see `RectGrid.set_seps` for detail
+
             ratios_w, ratios_h: None, float, array of float
                 ratios of width/height of rects in grid relative to origin rect
 
@@ -82,13 +113,6 @@ def get_figaxes_grid(nrows=1, ncols=1,
 
                 if array, its len should be `nx-1`, or `nx` (`ny-1`, `ny` respectively)
                     for `nx-1`, it means `[1, *ratios]`
-
-            ratios_wspace, ratios_hsapace: None, float, array of float
-                ratios of wspace, hspace relative to origin rect
-                Similar as `ratios_w`, `ratios_h`
-                    Except, if array, its len must be `nx-1`, `ny-1` respectively
-
-                if None, not set
 
             ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
                 ratio w/h for one axes or whole axes region (if given (None, int))
@@ -115,10 +139,11 @@ def get_figaxes_grid(nrows=1, ncols=1,
             raise TypeError(f'unexpected type for `at`: {type(at)}')
 
     # constraints
-    grid.set_grid_ratios(loc=loc, locing=locing, locunits=locunits,
+    grid.set_grid_dists(loc=loc, locing=locing, locunits=locunits,
                             origin_upper=origin_upper,
+                            wspaces=wspaces, wpunits=wpunits,
+                            hspaces=hspaces, hpunits=hpunits,
                             ratios_w=ratios_w, ratios_h=ratios_h,
-                            ratios_wspace=ratios_wspace, ratios_hspace=ratios_hspace,
                             ratio_wh=ratio_wh)
 
     # create axes
