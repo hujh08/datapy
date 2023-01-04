@@ -172,8 +172,8 @@ def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], locing='wh',
             including (with default):
                 ratios_w=1,
                 ratios_h=None,
-                ratios_wspace=0.01,
-                ratios_hspace=None,
+                wspaces=0.01,
+                hspaces=None,
                 ratio_wh=None
     '''
     # create axes
@@ -190,7 +190,7 @@ def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], locing='wh',
 ### for joint plot
 def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
                             ratio_w=0.1, ratio_h=None, ratio_wh=None,
-                            ratio_wspace=0.01, ratio_hspace=None,
+                            wspace=0.01, hspace=None,
                             **kwargs):
     '''
         axes for joint plot of 2d data
@@ -209,10 +209,10 @@ def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
             ratio_wh: None or float
                 ratio w/h for 2d axes
 
-            ratio_wspace, ratio_hspace: float, or None for `ratio_hspace`
+            wspace, hspace: float, or None for `hspace`
                 ratio of width/height of seps to 2d axes
 
-                if `ratio_hspace` is None, use `ratio_wspace`
+                if `hspace` is None, use `wspace`
 
         optional kwargs:
             pass to `get_figaxes_grid` except
@@ -222,8 +222,8 @@ def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
     if ratio_h is None:
         ratio_h=ratio_w
 
-    if ratio_hspace is None:
-        ratio_hspace=ratio_wspace
+    if hspace is None:
+        hspace=wspace
 
     i2d, ix, iy=0, 2, 1  # index for 2d, x, y axes
 
@@ -236,7 +236,7 @@ def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
                             at=at, origin_upper=False,
                             ratios_w=ratio_w, ratios_h=ratio_h,
                             ratio_wh=ratio_wh,
-                            ratios_wspace=ratio_wspace, ratios_hspace=ratio_hspace,
+                            wspaces=wspace, hspaces=hspace,
                             rects=[i2d, ix, iy],
                             sharex='col', sharey='row', **kwargs)
 
@@ -250,7 +250,7 @@ def get_figaxes_joint(loc=[0.1, 0.8], locing='wh', at=None,
 def get_figaxes_residual(ncols=1, loc=[0.1, 0.8], locing='wh', at=None,
                                 sharex='col', sharey=False,
                                 ratios_w=1, ratio_h=0.5, ratio_wh=None,
-                                ratios_wspace=0.01, ratio_hspace=0.01,
+                                wspaces=0.01, hspace=0.01,
                                 **kwargs):
     '''
         axes for residual plot of 2d data
@@ -275,14 +275,14 @@ def get_figaxes_residual(ncols=1, loc=[0.1, 0.8], locing='wh', at=None,
             ratio_wh: None or float
                 ratio w/h for 2d axes `ax`
 
-            ratios_wspace, ratio_hspace: same as `ratios_w`, `ratio_h`
+            wspaces, hspace: same as `ratios_w`, `ratio_h`
                 ratio of width/height of seps to origin 2d axes
     '''
     fig, axes=get_figaxes_grid(nrows=2, ncols=ncols, loc=loc, locing=locing,
                             at=at, origin_upper=True,
                             ratios_w=ratios_w, ratios_h=[1, ratio_h],
                             ratio_wh=ratio_wh,
-                            ratios_wspace=ratios_wspace, ratios_hspace=ratio_hspace,
+                            wspaces=wspaces, hspaces=hspace,
                             rects='col',
                             sharex=sharex, sharey=sharey, **kwargs)
 
