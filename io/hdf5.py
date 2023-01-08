@@ -8,11 +8,11 @@ import h5py
 
 import pandas as pd
 
-__all__=['hdf5_dump', 'hdf5_load',
-         'hdf5_dump_pds', 'hdf5_load_pds']
+__all__=['save_to_hdf5', 'load_hdf5',
+         'save_pds_to_hdf5', 'load_hdf5_pds']
 
 # dump to hdf5
-def hdf5_dump(path_or_obj, datas, name=None, mode='w', key_attrs=None):
+def save_to_hdf5(path_or_obj, datas, name=None, mode='w', key_attrs=None):
     '''
         dump datas to HDF5
 
@@ -43,7 +43,7 @@ def hdf5_dump(path_or_obj, datas, name=None, mode='w', key_attrs=None):
 
     if isinstance(path_or_obj, (str, bytes)):
         with h5py.File(path_or_obj, mode) as h5f:
-            return hdf5_dump(h5f, datas, name=name, key_attrs=key_attrs)
+            return save_to_hdf5(h5f, datas, name=name, key_attrs=key_attrs)
 
     grp=path_or_obj
 
@@ -58,7 +58,7 @@ def hdf5_dump(path_or_obj, datas, name=None, mode='w', key_attrs=None):
 
     _dump_dict_hdf5_group_recur(grp, datas, key_attrs=key_attrs)
 
-def hdf5_load(path_or_obj, key_attrs=None):
+def load_hdf5(path_or_obj, key_attrs=None):
     '''
         load HDF5 to dict
 
@@ -76,7 +76,7 @@ def hdf5_load(path_or_obj, key_attrs=None):
     '''
     if isinstance(path_or_obj, (str, bytes)):
         with h5py.File(path_or_obj, 'r') as h5f:
-            return hdf5_load(h5f, key_attrs=key_attrs)
+            return load_hdf5(h5f, key_attrs=key_attrs)
 
     grp=path_or_obj
 
@@ -139,7 +139,7 @@ def _load_dict_hdf5_group_recur(grp, key_attrs=None):
     return buffer
 
 # cooperate pandas
-def hdf5_dump_pds(path_or_obj, pdobjs, mode='w'):
+def save_pds_to_hdf5(path_or_obj, pdobjs, mode='w'):
     '''
         dump pd instances (pd.DataFrame or pd.Series) to HDF5 file
 
@@ -153,7 +153,7 @@ def hdf5_dump_pds(path_or_obj, pdobjs, mode='w'):
     assert mode in ['w', 'a']
     if isinstance(path_or_obj, str):   # filename
         with pd.HDFStore(path_or_obj, mode) as store:
-            return hdf5_dump_pds(store, pdobjs)
+            return save_pds_to_hdf5(store, pdobjs)
 
     store=path_or_obj
 
@@ -162,7 +162,7 @@ def hdf5_dump_pds(path_or_obj, pdobjs, mode='w'):
         assert isinstance(p, (pd.DataFrame, pd.Series))
         store[k]=p
 
-def hdf5_load_pds(path_or_obj, squeeze=False):
+def load_hdf5_pds(path_or_obj, squeeze=False):
     '''
         load HDF5 to dict of pd instances
 
@@ -173,7 +173,7 @@ def hdf5_load_pds(path_or_obj, squeeze=False):
     if isinstance(path_or_obj, str):   # filename
         with pd.HDFStore(path_or_obj, 'r') as store:
             kwargs=dict(squeeze=squeeze)
-            return hdf5_load_pds(store, **kwargs)
+            return load_hdf5_pds(store, **kwargs)
 
     hdfstore=path_or_obj
 
