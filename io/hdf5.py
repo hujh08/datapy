@@ -12,9 +12,9 @@ __all__=['save_to_hdf5', 'load_hdf5',
          'save_pds_to_hdf5', 'load_hdf5_pds']
 
 # dump to hdf5
-def save_to_hdf5(path_or_obj, datas, name=None, mode='w', key_attrs=None):
+def save_to_hdf5(datas, path_or_obj, name=None, mode='w', key_attrs=None):
     '''
-        dump datas to HDF5
+        save datas to HDF5
 
         Parameters:
             path_or_obj: str, h5py.File or h5py.Group
@@ -43,7 +43,7 @@ def save_to_hdf5(path_or_obj, datas, name=None, mode='w', key_attrs=None):
 
     if isinstance(path_or_obj, (str, bytes)):
         with h5py.File(path_or_obj, mode) as h5f:
-            return save_to_hdf5(h5f, datas, name=name, key_attrs=key_attrs)
+            return save_to_hdf5(datas, h5f, name=name, key_attrs=key_attrs)
 
     grp=path_or_obj
 
@@ -139,7 +139,7 @@ def _load_dict_hdf5_group_recur(grp, key_attrs=None):
     return buffer
 
 # cooperate pandas
-def save_pds_to_hdf5(path_or_obj, pdobjs, mode='w'):
+def save_pds_to_hdf5(pdobjs, path_or_obj, mode='w'):
     '''
         dump pd instances (pd.DataFrame or pd.Series) to HDF5 file
 
@@ -153,7 +153,7 @@ def save_pds_to_hdf5(path_or_obj, pdobjs, mode='w'):
     assert mode in ['w', 'a']
     if isinstance(path_or_obj, str):   # filename
         with pd.HDFStore(path_or_obj, mode) as store:
-            return save_pds_to_hdf5(store, pdobjs)
+            return save_pds_to_hdf5(pdobjs, store)
 
     store=path_or_obj
 
