@@ -53,3 +53,45 @@ def add_proxy_method(dicts, name, target, method_type=None, doc=None):
 
     # add to dict
     dicts[name]=func
+
+# bind new function to existed method
+def bind_new_func_to_instance(obj, attr, func, *args, **kwargs):
+    '''
+        bind new function to an existed method of instance
+
+        Parameters:
+            func: callable
+                injectable function
+                    defined as form
+                        def func(obj, oldfunc, oldargs, oldkws, *args, **kwargs)
+                    where
+                        obj: to passed by instance `obj`
+                        oldfunc: passed by backup of original `obj` attr
+                        oldargs, oldkws: passed by accepted args inside instance
+    '''
+    oldfunc=getattr(obj, attr)
+
+    def newfunc(*oldargs, **oldkws):
+        return func(obj, oldfunc, oldargs, oldkws, *args, **kwargs)
+    newfunc.__doc__=oldfunc.__doc__
+
+    setattr(obj, attr, newfunc)
+
+def bind_new_func_to_instance_by_trans(obj, attr, func):
+    '''
+        bind to instance method with simple function
+            which only transform result from old func (bound method of `obj`)
+
+        Parameters:
+            func: callable
+                function to handle result from old func
+
+                call by `func(res)`
+                    where res from old func
+    '''
+    def bind_func(obj, oldfunc, oldargs, oldkws):
+        res=oldfunc(*oldargs, **oldkws)
+        return func(res)
+
+    bind_new_func_to_instance(obj, attr, bind_func)
+

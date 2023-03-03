@@ -13,6 +13,9 @@ from matplotlib.colors import LinearSegmentedColormap
 from ._tools_plot import filter_by_lim, calc_density_map_2d, quants_to_levels
 from .colors import get_next_color_in_cycle
 from .legend import handler_nonfill, update_handler_for_contour
+from .transforms import (CompositeAxisScaleTrans,
+                         get_transforms_sr, combine_paths_transforms)
+from ._tools_class import bind_new_func_to_instance_by_trans
 
 __all__=['plot_hist', 'plot_cumul',
          'plot_2d_hist', 'plot_2d_contour', 'plot_2d_scatter',
@@ -302,13 +305,49 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
 
     return contours
 
-def plot_2d_scatter(ax, xs, ys, s=5, random_choice=None, **kwargs):
+def plot_2d_scatter(ax, xs, ys, s=None, random_choice=None,
+                        is_semisize=False, unit='points',
+                        angles=None, ratios=None, base_axis='y', **kwargs):
     '''
         scatter plot for 2d data
 
-        :param random_choice: None, or int
-            randomly choose a small subgroup to plot
-                in order to decrease file size
+        Parameters:
+            random_choice: None, or int
+                randomly choose a small subgroup to plot
+                    in order to decrease file size
+
+            is_semisize: bool, default False
+                whether size given in `s` is for semisize
+                    that is, like for circle, radius
+
+                that in initial `ax.scatter` is full size
+                    that is diameter for circle
+
+            unit: str, default 'points'
+                unit for size
+                    s is respective to `unit**2`
+
+                valid str: 'points', 'inches', 'dots', 'x', 'y', 'width', 'height'
+                    'x', 'y': x or y in data unit
+                    'width', 'height': in axes fraction unit
+                    'dots', 'inches': pixels or inches
+                    'points': points (1/72 inches)
+
+            angles, ratios: None or array-like
+            base_axis: 'x' 'y', default 'y'
+                parameters to define additional deformation
+                    
+                deformation only contains scaling, rotation
+                    no shearing
+                and for scaling, area of path is kept
+                    that means only scaling (a, 1/a)
+
+                ratios: ratio of another axis to base axis
+
+                angles=0 if None
+                ratios=1 if None
+
+        other parameters: see `ax.scatter`
     '''
     n=len(xs)
     assert len(ys)==n
@@ -323,11 +362,59 @@ def plot_2d_scatter(ax, xs, ys, s=5, random_choice=None, **kwargs):
             c=kwargs['c']
             kwargs['c']=[c[i] for i in inds]
 
-        if 's' in kwargs and not isinstance(kwargs['s'], numbers.Number):
-            s=kwargs['s']
-            kwargs['s']=[s[i] for i in inds]
+        if s is not None and not isinstance(s, numbers.Number):
+            s=[s[i] for i in inds]
 
-    return ax.scatter(xs, ys, s=s, **kwargs)
+    # initial plot
+    collection=ax.scatter(xs, ys, s=None, **kwargs)
+
+    # set transform
+    assert unit in ['points', 'inches', 'dots', 'x', 'y', 'width', 'height']
+    axis='x'
+    if unit in ['x', 'y']:
+        ptrans=ax.transData
+        axis=unit
+    elif unit in ['width', 'height']:
+        ptrans=ax.transAxes
+        axis=dict(w='x', h='y')[unit[0]]
+
+    k=2 if is_semisize else 1
+    ltrans=[]  # list of trans
+    if unit!='points':
+        k*=72  # points = inches/72
+
+        if unit!='inches':
+            ltrans.append(ax.figure.dpi_scale_trans)
+            func=lambda s0, k=k: k/s0
+
+            if unit!='dots':
+                ltrans.append(ptrans)
+                func=lambda s0, s1, k=k: s1*k/s0
+    if not ltrans:
+        func=lambda k=k: k  # func for points, inches
+    trans=CompositeAxisScaleTrans(ltrans, func, axis=axis)
+
+    collection.set_transform(trans)
+
+    # set sizes
+    if s is None:
+        s=collection.get_sizes()/trans.get_scale()**2
+    elif isinstance(s, numbers.Number):
+            s=[s]
+    collection.set_sizes(s)
+
+    # deformation
+    if angles is not None or ratios is not None:
+        angles=0 if None else angles
+        ratios=1 if None else ratios
+        trans_sr=get_transforms_sr(angles=angles, ratios=ratios, base_axis=base_axis)
+
+        func=lambda res, t1=trans_sr: combine_paths_transforms(res, t1)
+        bind_new_func_to_instance_by_trans(collection, 'get_transforms', func)
+
+    ax.autoscale_view()
+
+    return collection
 
 def plot_2d_bins(ax, xs, ys, bins=5, binlim=None, binxoy='x',
                     fagg='median', ferr=None,
