@@ -465,10 +465,11 @@ def save_to_hdf5(datas, path_or_obj, name=None, mode='w', key_attrs=None):
             path_or_obj: str, h5py.File or h5py.Group
                 hdf5 instance or file name to dump data in
 
-            mode: str 'w', 'w-', 'x', or 'a'
+            mode: str 'r+', 'w', 'w-', 'x', or 'a'
                 whether create new file or modify exsited
                 work only when file name given in `path_or_obj`
 
+                    r+       Read/write, file must exist
                     w        Create file, truncate if exists
                     w- or x  Create file, fail if exists
                     a        Modify if exists, create otherwise
@@ -496,7 +497,7 @@ def save_to_hdf5(datas, path_or_obj, name=None, mode='w', key_attrs=None):
 
                 if str, that is key in datas
     '''
-    assert mode in ['w', 'w-', 'x', 'a']
+    assert mode in ['r+', 'w', 'w-', 'x', 'a']
 
     if isinstance(path_or_obj, (str, bytes)):
         with h5py.File(path_or_obj, mode) as h5f:
@@ -520,6 +521,12 @@ def save_to_hdf5(datas, path_or_obj, name=None, mode='w', key_attrs=None):
 ## real work place
 
 ### set HDF5 dataset
+def _is_append_mode(grp):
+    '''
+        is append mode for given group
+    '''
+    return grp.file.mode in ['r+', 'a']
+
 def _save_data_to_hdf5_dataset(grp, name, datas):
     '''
         set data as a Dataset in parent Group
@@ -549,6 +556,8 @@ def _save_data_to_hdf5_dataset(grp, name, datas):
 
         grp.create_dataset(name, data=datas)
     elif datas is not None:
+        if name in grp and _is_append_mode(grp):
+            del grp[name]
         grp[name]=datas
 
     dset=grp[name]
