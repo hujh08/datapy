@@ -162,7 +162,9 @@ def has_na(d):
     return np.any(pd.isna(d))
 
 # to 2d table
-def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
+def df_to_2dtab(df, xcol, ycol, vcol,
+                    aggfunc=None,
+                    fillna=None,
                     xkey=None, ykey=None,
                     keep_dtype=True,
                     drop_xname=True, reset_yind=False):
@@ -180,24 +182,35 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
 
         useful for df with product-type of index
 
-        :param xkey, ykey: None, or callable, dict, Sequence, 1d np.ndarray
-            key to sort xcol/ycol
+        wrapper of `DataFrame.pivot` or `DataFrame.pivot_table`
+            `xcol, ycol, vcol` for `index, columns, values`
+        support multi-level name for `xcol`, `ycol`
 
-            see `sort_index_by_key` for detail
+        Parameters:
+            xkey, ykey: None, or callable, dict, Sequence, 1d np.ndarray
+                key to sort xcol/ycol
+
+                see `sort_index_by_key` for detail
+
+            keep_dtype: bool, default True
+                whether to keep dtype as initial `vcol`
+
+                dtype might change when na exists after pivot
     '''
-    df=df.reset_index()[[xcol, ycol, vcol]]
     if keep_dtype:
         dt0=df[vcol].dtype
 
-    xs, dfs=[], []
-    for xi, dfi in df.groupby(xcol):
-        xs.append(xi)
-        dfs.append(dfi.set_index(ycol)[vcol])
+    # pivot
+    func_piv=lambda df, **kws: df.pivot(**kws)
+    kws_pv=dict(index=ycol, columns=xcol, values=vcol)
+    if aggfunc is not None:
+        func_piv=lambda df, **kws: df.pivot_table(**kws)
+        kws_pv['aggfunc']=aggfunc
 
-    kwargs=dict(keys=xs, axis=1)
-    if not drop_xname:  # keep xname
-        kwargs['names']=[xcol]
-    dftab=pd.concat(dfs, **kwargs)
+    dftab=func_piv(df, **kws_pv)
+
+    if drop_xname:
+        dftab.columns.name=None
 
     # na
     if fillna is not None:
@@ -213,6 +226,7 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
     if keep_dtype:
         dftab=dftab.astype(dt0)
 
+    # reset index
     if reset_yind:
         dftab=dftab.reset_index()
 
@@ -222,8 +236,7 @@ def df_to_2dtab(df, xcol, ycol, vcol, fillna=None,
 def df_count_by_group(df, hcol, vcol, fillna=0,
                         normalize=False, sort_cnt=False,
                         dropna_cnt=True,
-                        sort_hcol=None, sort_vcol=None,
-                        colname_count='_count', **kwargs):
+                        sort_hcol=None, sort_vcol=None, **kwargs):
     '''
         count df in group of two columns
         output a 2d table
@@ -243,22 +256,32 @@ def df_count_by_group(df, hcol, vcol, fillna=0,
 
                 see `sort_index_by_key` for detail
 
-            colname_count: str
-                column name for count result, use '_count' by default
-                    must be different with `hcol` and `vcol`
-
-                not affect result table
-
             normalize, sort_cnt, dropna_cnt:
                 args for `df.value_counts`
+
+                effect of `sort_cnt` may be overrided by `sort_hcol` or `sort_vcol`
+                    if some not None
     '''
-    df_cnt=df.value_counts(subset=[hcol, vcol],
+    subset=[]
+    for col in [hcol, vcol]:
+        if isinstance(col, str):
+            col=[col]
+        subset.extend(col)
+
+    name_dfcnt='_count'
+    if name_dfcnt in subset:
+        for i in range(len(subset)+1):
+            name_dfcnt=f'_count{i}'
+
+    # value counts
+    df_cnt=df.value_counts(subset=subset,
                            normalize=normalize, sort=sort_cnt,
                            dropna=dropna_cnt, ascending=False)\
-             .to_frame(name=colname_count)\
+             .to_frame(name=name_dfcnt)\
              .reset_index()
 
-    return df_to_2dtab(df_cnt, hcol, vcol, colname_count, fillna=fillna,
+    # to table
+    return df_to_2dtab(df_cnt, hcol, vcol, name_dfcnt, fillna=fillna,
                         xkey=sort_hcol, ykey=sort_vcol, **kwargs)
 
 # concat along index
