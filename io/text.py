@@ -203,4 +203,5 @@ def save_to_txt(df, path_or_buf=None, index=False,
                 buffer to write to. same as `to_string`
                 if None, output is returned
     '''
-    return df.to_csv(path_or_buf, index=index, sep=sep, **kwargs)
+    kwargs.update(index=index, sep=sep, na_rep=na_rep)
+    return df.to_csv(path_or_buf, **kwargs)
