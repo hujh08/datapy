@@ -181,7 +181,8 @@ def line_comment_strip(line, comment='#'):
     return re.sub(r'[%s].*$' % comment, '', line)
 
 # write text
-def save_to_txt(df, path_or_buf=None, index=False, sep=' ', **kwargs):
+def save_to_txt(df, path_or_buf=None, index=False,
+                    sep=' ', na_rep='NaN', **kwargs):
     '''
         save DataFrame to text file
             hujh-friendly default arguments
