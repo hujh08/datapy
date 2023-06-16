@@ -5,8 +5,27 @@
 '''
 
 import os, sys
+from pathlib import Path
 
-__all__=['find_sub_in_parent', 'add_lib_in_parent']
+__all__=['dirname_posix',
+         'find_sub_in_parent', 'add_lib_in_parent']
+
+# posix dirname
+def dirname_posix(p):
+    '''
+        p
+    '''
+    if p!='/':
+        p=p.rstrip('/')
+
+    d=os.path.dirname(p)
+    if not d:
+        return '.'
+    return d
+
+# parent of path
+def parent(p):
+    return str(path(p).parent)
 
 # parent path containing given sub file
 def find_sub_in_parent(sub, return_rel=True, find_all=False):
