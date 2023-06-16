@@ -20,12 +20,13 @@ def dirname(p):
             dirname('DIR1/DIR2/'):
                 'DIR1', not 'DIR1/DIR2'
     '''
-    if p!='/':
-        p=p.rstrip('/')
+    sep=os.sep
+    if p!=sep:
+        p=p.rstrip(sep)
 
     d=os.path.dirname(p)
     if not d:
-        return '.'
+        return os.curdir
     return d
 
 def dirname_path(p):
