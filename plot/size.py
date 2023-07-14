@@ -10,6 +10,11 @@
           Also called Postscript Point, in TeX this is called a big point (bp)
 '''
 
+import numbers
+
+import matplotlib.pyplot as plt
+from matplotlib import font_manager
+
 # Unit to inch
 Units=dict(
     inches=1.,      # 25.4 mm
@@ -25,6 +30,8 @@ Units['pts']=Units['points']
 Units['inch']=Units['inches']
 
 # function
+
+## convert between units
 def convert_unit(src, dest='inch'):
     '''
         convert src unit to another ('inch' by default)
@@ -34,3 +41,40 @@ def convert_unit(src, dest='inch'):
         d=d/Units[dest]
 
     return d
+
+## fontsize
+def fontsize_in_pts(size=None):
+    '''
+        convert fontsize to value in unit points
+
+        Parameters:
+            size: float, None, or str
+                font size
+
+                if float,
+                    absolute value of fontsize in unit points
+
+                if str,
+                    'xx-small', 'x-small', 'small', 'medium', 'large', 
+                    'x-large', 'xx-large', 'larger', 'smaller'
+                see `matplotlib.font_manager.font_scalings`
+                    for details
+    '''
+    if isinstance(size, numbers.Number):
+        return size
+
+    fontsize=plt.rcParams['font.size']
+    if size is None:
+        return fontsize
+
+    assert isinstance(size, str), \
+        'only support float, str or None for fontsize, ' \
+        'but got %s' % (type(size).__name__)
+
+    font_scalings=font_manager.font_scalings
+    assert size in font_scalings, \
+        'only allow fontsize in %s, ' \
+        'but got \'%s\'' % (str(list(font_scalings.keys())),
+                                size)
+    s=font_scalings[size]
+    return s*fontsize

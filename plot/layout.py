@@ -40,11 +40,10 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib import font_manager
 
 from .linear import LinearManager, LnComb
 from ._tools_layout import map_to_nested, squeeze_nested, confirm_arg_in
-from .size import Units
+from .size import Units, fontsize_in_pts
 from ._tools_class import add_proxy_method
 from .params import params_create_axes
 
@@ -249,32 +248,21 @@ class RectManager:
                 with LnComb type
 
             Parameters:
-                size: float, None, or str
-                    if str, only support
+                size: None, float, or str
+                    fontsize
+
+                    if float,
+                        absolute value of fontsize in unit points
+
+                    if str,
                         'xx-small', 'x-small', 'small', 'medium', 'large', 
                         'x-large', 'xx-large', 'larger', 'smaller'
                     see `matplotlib.font_manager.font_scalings`
                         for details
         '''
         pts=self.get_size_unit('points')  # points size in inches
-        if isinstance(size, numbers.Number):
-            return size*pts
-
-        fontsize=plt.rcParams['font.size']
-        if size is None:
-            return fontsize*pts
-
-        assert isinstance(size, str), \
-            'only support float, str or None for fontsize, ' \
-            'but got %s' % (type(size).__name__)
-
-        font_scalings=font_manager.font_scalings
-        assert size in font_scalings, \
-            'only allow fontsize in %s, ' \
-            'but got \'%s\'' % (str(list(font_scalings.keys())),
-                                size)
-        s=font_scalings[size]
-        return (s*fontsize)*pts
+        size=fontsize_in_pts(size)
+        return size*pts
 
     # tick size
     def get_ticksize(self, axis, item='tick', which='major'):
