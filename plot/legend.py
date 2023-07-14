@@ -68,6 +68,7 @@ def add_legend(ax, *args,
                     onlylabel=False, labelrha=False,
                     alpha=None,
                     labelalpha=None, handlealpha=None,
+                    labels_as_key=True,
                     **kwargs):
     '''
         wrapper of `ax.legend` with new features:
@@ -102,8 +103,28 @@ def add_legend(ax, *args,
 
                     in `ax.legend`,
                         it is controlled by param `markerfirst`
+            5, labels_as_key: bool, default True
+                whether to use labels as key for handles
+                    works when only `labels` given
+
+                if True:
+                    handle is matched by label-handle map,
+                        constructed from `ax.get_legend_handles_labels`:
+                            axhs, axls=ax.get_legend_handles_labels()
+                            map_axlh=dict(zip(axls, axhs))
+                            handles=[map_axhl[l] for l in labels]
+                if False:
+                    matched by order as `ax.legend`,
+                        which means
+                            axhs, _=ax.get_legend_handles_labels()
+                            handles, labels=zip(*zip(axhs, labels))
     '''
     kwargs.setdefault('frameon', False)
+
+    # parse of handles, labels
+    *args, kwargs=\
+        _parse_legend_from_args(ax, *args, **kwargs,
+                                    labels_as_key=labels_as_key)
 
     # alpha
     if alpha is not None:
@@ -251,7 +272,8 @@ def add_color_texts(ax, texts, colors,
                     ha=ha, va=va)
         offy_inch-=tdy_inch
 
-def add_legend_color_text(ax, *args, colors=None, **kwargs):
+def add_legend_color_text(ax, *args, colors=None,
+                               labels_as_key=True, **kwargs):
     '''
         add legend with only colored text labels
 
@@ -268,9 +290,19 @@ def add_legend_color_text(ax, *args, colors=None, **kwargs):
                     list of colors
                 if callable:
                     f(handle) ==> color
+
+            labels_as_key: bool, default True
+                whether to use labels as key for handles
+                    when only `labels` given
+                
+                if not,
+                    match by order, same as `ax.legend`
+
     '''
     handles, labels, kwargs=\
-        _parse_legend_from_args(ax, *args, **kwargs)
+        _parse_legend_from_args(ax, *args, **kwargs,
+                                    labels_as_key=labels_as_key)
+    kwargs.pop('handler_map', None)  # no need handler_map after
 
     # color getter
     color_getter=None
@@ -296,11 +328,11 @@ def add_legend_color_text(ax, *args, colors=None, **kwargs):
     return add_color_texts(ax, labels, colors, **kwargs)
 
 ## auxiliary functions
-def _parse_legend_from_args(ax, *args, **kwargs):
+def _parse_legend_from_args(ax, *args, labels_as_key=True, **kwargs):
     '''
         parse legend handles and labels from args
 
-        Correpond to signatures of legend:
+        Signatures of legend (same as `ax.legend`):
             legend()
             legend(labels)
             legend(handles, labels)
@@ -308,14 +340,62 @@ def _parse_legend_from_args(ax, *args, **kwargs):
             legend(handles=handles)
             legend(handles=handles, labels=labels)
 
+        Changes:
+            1, if only labels given and `labels_as_key` True,
+                handle is matched by label-handle map,
+                    constructed from `ax.get_legend_handles_labels`:
+                        axhs, axls=ax.get_legend_handles_labels()
+                        map_axlh=dict(zip(axls, axhs))
+                        handles=[map_axhl[l] for l in labels]
+                instead of by order in `ax.legend`,
+                    which means
+                        axhs, _=ax.get_legend_handles_labels()
+                        handles, labels=zip(*zip(axhs, labels))
+            2, if both handles and lables given, but with mismatch length
+                raise ValueError
+
         Returns:
             handles, labels, kwargs
     '''
-    handles, labels, args, kwargs=\
-        mlegend._parse_legend_args([ax], *args, **kwargs)
+    if ('handles' in kwargs or 'labels' in kwargs) and args:
+         raise ValueError('cannot mix positonal and keyword arguments '
+                          'for `handles` and `labels`')
 
+    handler_map=kwargs.get('handler_map', None)
+
+    # parse args, kwargs
     if args:
-        raise ValueError('got unexpected positonal args')
+        if len(args)==1:
+            handles, labels=None, args[0]
+        else:
+            handles, labels=args
+    else:
+        handles=kwargs.pop('handles', None)
+        labels=kwargs.pop('labels', None)
+
+    # handles and labels
+    if handles is not None and labels is not None:
+        if len(handles)!=len(labels):
+            s='mismatch length between `handles` and `labels`'
+            raise ValueError(s)
+
+        return handles, labels, kwargs
+
+    ## handles None or labels None
+    if labels is None and handles is not None:
+        labels=[h.get_label() for h in handles]
+        return handles, labels, kwargs
+
+    axhs, axls=ax.get_legend_handles_labels(legend_handler_map=handler_map)
+    if handles is None and labels is None:
+        return axhs, axls, kwargs
+
+    ### handles None, labels not None
+    if labels_as_key:  # match by key
+        map_axhl=dict(zip(axls, axhs))
+        handles=[map_axhl[l] for l in labels]
+    else:  # match by order
+        handles=axhs[:len(labels)]
 
     return handles, labels, kwargs
 
