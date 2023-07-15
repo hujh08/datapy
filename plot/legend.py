@@ -226,6 +226,8 @@ def add_color_texts(ax, texts, colors,
                     use :rc:`legend.labelspacing`
 
             optional kwargs: passed to `ax.text`
+                for example:
+                    fontsize: font size, default :rc:legend.fontsize
     '''
     texts=list(texts)
     colors=list(colors)
@@ -241,14 +243,18 @@ def add_color_texts(ax, texts, colors,
     s_va=['bottom', 'center', 'top']
     assert va in s_va, f'only allow `va` in {s_va}'
 
+    # fontsize
+    kwargs.setdefault('fontsize',
+                      plt.rcParams['legend.fontsize'])
+
     # rowspacing to unit inches
     if rowspacing is None:
         rowspacing=plt.rcParams['legend.labelspacing']
 
-    fontsize=fontsize_in_pts(kwargs.get('fontsize', None))
+    fsize_pts=fontsize_in_pts(kwargs['fontsize'])
     t_inch=convert_unit('points', 'inch')  # inch/points
     
-    tdy_inch=(1+rowspacing)*fontsize*t_inch  # spacing between baseline of text
+    tdy_inch=(1+rowspacing)*fsize_pts*t_inch  # spacing between baseline of text
 
     offy_inch=0   # offset along y axis in unit inches
     numt=len(texts)
