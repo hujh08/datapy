@@ -207,38 +207,3 @@ def num_terms_of_poly_nd(dim, deg, return_arr=False):
         return numts
 
     return numts[-1, -1]
-
-# for numpy.ndarray
-def align_arrs_shape(xs):
-    '''
-        align arrays' shape
-
-        :param xs: sequence of number or ndarray
-            must have same shape for all nd array
-                raise ValueError if not
-
-            if mixed scalar and ndarray,
-                fill `scalar` to common shape of ndarray
-    '''
-    n_xs=len(xs)
-    xs=[np.asarray(x) for x in xs]
-
-    is_scalars=[x.ndim==0 for x in xs]
-    n_scalars=sum(is_scalars)
-    if n_scalars is n_xs:
-        return xs
-
-    # ndarray in `xs`
-    arr_xs=[x for k, x in zip(is_scalars, xs) if not k]
-
-    shape=arr_xs[0].shape
-    if any([a.shape!=shape for a in arr_xs[1:]]):
-        raise ValueError('different shape for ndarrays in `xs`')
-
-    ## convert number to array
-    if n_scalars!=0:
-        a0=arr_xs[0]
-        xs=[np.full_like(a0, x, dtype=x.dtype) if k else x
-                for k, x in zip(is_scalars, xs)]
-
-    return xs

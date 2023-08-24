@@ -124,7 +124,7 @@ def polyfit_ndim(ys, *xs, degs=1, rcond=None, ret='all'):
 
     # NDPoly instance
     p=NDPoly(degs, dim=dim)
-    fitres=p.fit(ys, *xs, rcond=rcond)
+    fitres=p.fit(ys, *xs, rcond=rcond, inplace=True)
     
     if ret=='fit':
         return fitres

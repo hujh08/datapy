@@ -9,8 +9,7 @@ import numbers
 
 import numpy as np
 
-from ._tools import (get_multidegs, sort_degs,
-                     align_arrs_shape)
+from ._tools import (get_multidegs, sort_degs)
 
 class NDPoly:
     '''
@@ -44,11 +43,17 @@ class NDPoly:
                                 0 deg in end could be missed
                                 int d for tuple (d,)
 
-                coeffs: number or list of number
+                coeffs: number or list of arrays
                     list of coefficients
                     same length as "real" `degs`
 
                     if number, use same coeff for all items
+
+                    if list of arrays,
+                        len equal to number of terms
+
+                        support ndarray coeff
+                            for multiply polys
 
                 dim: None or int
                 kwargs: optional args for `get_multidegs`
@@ -94,9 +99,6 @@ class NDPoly:
             coeffs=list(coeffs)
             if len(coeffs)!=len(degs):
                 raise ValueError('len of `coeffs` mismatch with that of `degs`')
-
-            if not all([isinstance(c, numbers.Number) for c in coeffs]):
-                raise ValueError(f'got unexpected `coeffs`: {coeffs}')
 
         # set properties
         self._degs=degs
@@ -190,7 +192,7 @@ class NDPoly:
         self._coeffs=[self._coeffs[i] for i in inds]
 
     # evaluate
-    def calc_xterms(self, *xs):
+    def calc_xterms(self, *xs, broadcast=False):
         '''
             calculate terms x1^a1 * x2^a2 * ... * xn^an
                 for (a1, a2, ..., an) in degs
@@ -212,46 +214,33 @@ class NDPoly:
         # xterms
         fpow=lambda xj, i: pows[xj][i]
         inds=list(range(self._dim))
-        return self._gen_calc_xterms(*inds, fpow=fpow)
+        terms=self._gen_calc_xterms(*inds, fpow=fpow)
 
-    def eval(self, *xs):
+        if broadcast:
+            terms=np.broadcast_arrays(*terms)
+
+        return terms
+
+    def eval(self, *xs, coeffs=None):
         '''
             evaluate poly by assign variables to some value
         '''
         if len(xs)!=self._dim:
             raise ValueError('num of args mismatch with poly dim')
 
+        if coeffs is None:
+            coeffs=self._coeffs
+        elif len(coeffs)!=len(self._degs):
+            s='mismatch len between `coeffs` and degs'
+            raise ValueError(s)
+
         xterms=self.calc_xterms(*xs)
-        terms=[c*t for c, t in zip(self._coeffs, xterms)]
+        terms=[c*t for c, t in zip(coeffs, xterms)]
 
         return sum(terms)
 
-    def __call__(self, *xs):
-        return self.eval(*xs)
-
-    # fit
-    def fit(self, ys, *xs, rcond=None, inplace=True):
-        '''
-            adopt coeffs by fit to (*xs, ys)
-        '''
-        ys, *xs=map(np.ravel, align_arrs_shape((ys, *xs)))
-        n=len(ys)
-
-        xterms=[]
-        for t in self.calc_xterms(*xs):
-            if isinstance(t, numbers.Number):
-                t=np.full(n, t)
-            xterms.append(t)
-        xterms=np.column_stack(xterms)
-
-        # fit
-        fitres=np.linalg.lstsq(xterms, ys, rcond=rcond)
-        coeffs=fitres[0]
-
-        if inplace:
-            self._coeffs[:]=coeffs
-
-        return fitres
+    def __call__(self, *xs, coeffs=None):
+        return self.eval(*xs, coeffs=coeffs)
 
     ## auxiliary functions
     def _gen_calc_xterms(self, *xs, fpow=None, fprodsum=None, fprod=None):
@@ -280,6 +269,51 @@ class NDPoly:
             xterms.append(fprodsum(xpows))
 
         return xterms
+
+    # fit
+    def fit(self, ys, *xs, rcond=None, inplace=True):
+        '''
+            adopt coeffs by fit to (*xs, ys)
+        '''
+        xterms=self.calc_xterms(*xs, broadcast=True)
+        xterms=np.column_stack(xterms)
+
+        # fit
+        fitres=np.linalg.lstsq(xterms, ys, rcond=rcond)
+        coeffs=fitres[0]
+
+        if inplace:
+            self._coeffs[:]=coeffs
+
+        return fitres
+
+    # partial derivative
+    def deriv_1st_at(self, ind, coeffs=None):
+        '''
+            1st derivative at nth variate
+
+            return new instance for it
+        '''
+        if coeffs is None:
+            coeffs=self._coeffs
+        elif len(coeffs)!=len(self._degs):
+            s='mismatch len between `coeffs` and degs'
+            raise ValueError(s)
+
+        degs_d=[]
+        coeffs_d=[]
+        for tdeg, c in zip(self._degs, coeffs):
+            if tdeg[ind]==0:
+                continue
+
+            coeffs_d.append(tdeg[ind]*c)
+
+            tdeg=list(tdeg)
+            tdeg[ind]-=1
+            degs_d.append(tuple(tdeg))
+
+        return type(self)(degs=degs_d, dim=self._dim,
+                            coeffs=coeffs_d)
 
     # complicated functions by `sympy`
     def to_sym_poly(self):
