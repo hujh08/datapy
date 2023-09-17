@@ -9,7 +9,7 @@ import os, shutil
 import yaml
 import numbers
 
-__all__=['load_yaml', 'save_to_yaml']
+__all__=['load_yaml', 'save_to_yaml', 'update_yaml']
 
 # load yaml
 def load_yaml(fileobj):
@@ -116,6 +116,19 @@ def save_to_yaml(data, stream=None, Dumper=None, sort_keys=False,
 
     return yaml.dump(data, stream, **kwargs)
 
+def update_yaml(data, fname, safe_backup=True, **kws):
+    '''
+        update yaml
+    '''
+    if os.path.isfile(fname):
+        data_new=data
+        data=load_yaml(fname)
+        data.update(data_new)
+
+    kws['safe_backup']=safe_backup
+    return save_to_yaml(data, fname, **kws)
+
+## auxiliary functions
 def _list_representer(dumper, data):
     '''
         new representer for List
