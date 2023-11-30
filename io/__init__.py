@@ -1,4 +1,8 @@
 
+'''
+    io of data files
+'''
+
 from .text import *
 
 from .recfits import *
