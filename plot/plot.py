@@ -34,7 +34,7 @@ def plot_hist(ax, xs, bins=50, xlim=None, density=True, histtype='step', **kwarg
     return ax.hist(xs, bins=bins, density=density, histtype=histtype,
                 range=xlim, **kwargs)
 
-def plot_cumul(ax, xs, xlim=None, **kwargs):
+def plot_cumul(ax, xs, xlim=None, norm=True, **kwargs):
     '''
         cumulative plot
     '''
@@ -45,7 +45,9 @@ def plot_cumul(ax, xs, xlim=None, **kwargs):
 
     # sort
     n=len(xs)
-    fracs=np.arange(n+1)/n
+    fracs=np.arange(n+1)
+    if norm:
+        fracs=fracs/n
     
     xsorts=np.sort(xs)
     xsorts=[xsorts[0], *xsorts]  # append zero point
