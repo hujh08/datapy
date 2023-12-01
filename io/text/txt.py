@@ -5,11 +5,11 @@
 '''
 
 import numbers
-import re
 
 import pandas as pd
 
-from .utils import line_comment_strip
+from .utils import (lstrip_line_comment_chars, rstrip_line_comment,
+                    read_nth_line)
 
 __all__=['load_txt', 'load_txts', 'save_to_txt']
 
@@ -35,6 +35,9 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
             line_nrow: None or int
                 line to specify number of rows to read
 
+                if None,
+                    no such line exists
+
             header_comment: bool
                 specify whether comment char added before header line
 
@@ -42,7 +45,7 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
                     like through tools `sed` or `awk`
 
                 if `header_comment` is True and no `header` given
-                    by default, use 0, `line_nrow`+1 if it given
+                    by default, use 0 or `line_nrow`+1 if it given
 
                     NOTE:
                         only support single header line
@@ -51,7 +54,7 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
             fields: list-like or callable, optional
                 columns to output,
 
-                In most cases, it is just alias of `usecols`
+                in most cases, it is just alias of `usecols`
                     also columns in output
                 if `map_to_srccols` given (and `fields` is list-like),
                     column names in source text file are different
@@ -60,8 +63,8 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
                 map name in `fields` to one in source text file
 
                 only work for list-like `fields`
-                Case when `fields` is callable, underlying logic is kind of complicated
-                    `df.rename` after loading might be a simpler solution
+                    recommand to use `df.rename` after loading
+                        if callable `fields` given
     '''
     skiprows=set()   #  for nrows and header line
     if line_nrow is not None:  # if given, fetch it
@@ -70,7 +73,7 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
         line=read_nth_line(fileobj, line_nrow, restore_stream=True)
 
         if comment is not None:
-            line=line_comment_strip(line, comment=comment)
+            line=rstrip_line_comment(line, comment=comment)
 
         # nrows
         nrows=int(line)
@@ -84,15 +87,16 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
 
         n=line_nrow+1 if line_nrow is not None else 0  # default header
         header=kwargs.pop('header', n)
-        assert isinstance(header, numbers.Integral)  # only support sinle header line
+        if not isinstance(header, numbers.Integral):
+            s='only support sinle header line'
+            raise Exception(s)
 
         line=read_nth_line(fileobj, header, restore_stream=True)
 
-        # remove comment char in left
+        # remove head comment chars and end comment string
         assert len(comment)==1
-        line=re.sub(r'^[%s\s]*' % comment, '', line)
-
-        line=line_comment_strip(line, comment)
+        line=lstrip_line_comment_chars(line, comment)
+        line=rstrip_line_comment(line, comment)
 
         # update arguments
         kwargs['names']=line.split()  # only whitespace separation
@@ -145,34 +149,6 @@ def load_txts(files, ignore_index=True, **kwargs):
     dfs=[load_txt(f, **kwargs) for f in files]
     return pd.concat(dfs, ignore_index=ignore_index)
 
-## auxiliary functions
-def read_nth_line(fileobj, n, restore_stream=False):
-    '''
-        read nth line
-
-        `n` is 0-indexed
-
-        `restore_stream`: bool
-            whether to restore stream position
-
-            if False, after return, current position would be (n+1)-th line
-    '''
-    if isinstance(fileobj, str):
-        with open(fileobj) as f:
-            return read_nth_line(f, n)
-
-    assert n>=0
-    if restore_stream:
-        t=fileobj.tell()
-
-    for _ in range(n+1):
-        line=fileobj.readline()
-
-    if restore_stream:
-        fileobj.seek(t)
-
-    return line
-
 # write text
 def save_to_txt(df, path_or_buf=None, index=False,
                     sep=' ', na_rep='NaN', **kwargs):
@@ -184,9 +160,10 @@ def save_to_txt(df, path_or_buf=None, index=False,
 
         changelog:
             2022/04/26: use `df.to_csv`, instead of `df.to_string`
-                output of the latter has no '\n' in last line
-                    which may raise wrong result for some frequently used routine
-                        like `wc -l`
+                output of the latter has no '\\n' in last line
+                    which may raise wrong result
+                        for some frequently used routine
+                            like `wc -l`
 
         Parameters:
             df: DataFrame
