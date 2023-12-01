@@ -9,6 +9,8 @@ import re
 
 import pandas as pd
 
+from .utils import line_comment_strip
+
 __all__=['load_txt', 'load_txts', 'save_to_txt']
 
 # read text
@@ -170,15 +172,6 @@ def read_nth_line(fileobj, n, restore_stream=False):
         fileobj.seek(t)
 
     return line
-
-### remove comment
-def line_comment_strip(line, comment='#'):
-    '''
-        remove comment in a line
-    '''
-    assert len(comment)==1  # only support single char
-
-    return re.sub(r'[%s].*$' % comment, '', line)
 
 # write text
 def save_to_txt(df, path_or_buf=None, index=False,

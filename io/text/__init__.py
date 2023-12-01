@@ -3,4 +3,5 @@
     io of text file
 '''
 
-from .text import *
+from .txt import *
+from .fwf import *
