@@ -8,9 +8,12 @@ import numbers
 
 import pandas as pd
 
-from .utils import strip_empty_lines, words_in_line
+from .utils import (strip_empty_lines, words_in_line,
+                    read_nth_line)
 
-__all__=['load_fwf', 'load_fwf_by_descrip']
+__all__=['load_fwf',
+         'load_fwf_by_descrip', 'load_fwf_by_header',
+         'save_to_fwf']
 
 # load fwf
 def load_fwf(file_or_buffer, colspec='infer', header=None,
@@ -32,8 +35,22 @@ def load_fwf(file_or_buffer, colspec='infer', header=None,
     return pd.read_fwf(file_or_buffer, **kwargs)
 
 # load fwf with readme doc
+def load_fwf_by_header(file_or_buffer, header=0, align='left', **kwargs):
+    '''
+        load fwf with a header
+
+        colspec is given by header
+    '''
+    lhdr=read_nth_line(file_or_buffer, header, restore_stream=True)
+    colspecs, names=parse_aligned_header(lhdr, align=align)
+    print(colspecs)
+    print(names)
+
+    kwargs.update(header=header)
+    return load_fwf(file_or_buffer, colspecs=colspecs, **kwargs)
+
 def load_fwf_by_descrip(file_or_buffer, descr,
-                            how_descr=None,
+                            how_descr=None, descr_align='left',
                             col_bytes_in_descr=0,
                             col_label_in_descr=None, **kwargs):
     '''
@@ -65,6 +82,11 @@ def load_fwf_by_descrip(file_or_buffer, descr,
 
                 if list,
                     by col spec or col sep
+
+            descr_align: 'left' or 'right', default 'left'
+                how description is aligned with its header
+
+                only works when header given in `how_descr`
     '''
     # bytes and label from descr
     if how_descr is None:
@@ -73,6 +95,7 @@ def load_fwf_by_descrip(file_or_buffer, descr,
     else:
         args=(how_descr,)
         if isinstance(how_descr, str):
+            args+=(descr_align,)
             f_parse=parse_fwf_descrip_by_header
         elif isinstance(how_descr[0], numbers.Number):
             f_parse=parse_fwf_descrip_by_colseps
@@ -222,7 +245,7 @@ def parse_fwf_descrip_by_colseps(descrip, seps, ind_bytes=0, ind_label=None):
                 colspec_label=colspec_label)
 
 ### parse by aligned header
-def parse_aligned_header(header):
+def parse_aligned_header(header, align='left'):
     '''
         parse header
             aligned in first character of each field
@@ -230,17 +253,26 @@ def parse_aligned_header(header):
 
         return
             (colspecs, fields)
+
+        :param align: 'left', 'right', default 'left'
+            header aligned with table body in left or right
     '''
     fields, tspans=words_in_line(header)
 
-    starts=[t[0] for t in tspans[1:]]
-    seps=[None, *starts, None]
+    if align=='left':
+        seps=[t[0] for t in tspans[1:]]
+    elif align=='right':
+        seps=[t[-1] for t in tspans[:-1]]
+    else:
+        raise ValueError(f'unexpected `align`: {align}. '
+                          'only allow "left", "right"')
+    seps=[None, *seps, None]
 
     colspecs=list(zip(seps[:-1], seps[1:]))
 
     return colspecs, fields
 
-def parse_fwf_descrip_by_header(descrip, header, 
+def parse_fwf_descrip_by_header(descrip, header, align='left',
                                     col_bytes=0, col_label=None):
     '''
         parse description of fixed-width formatted text
@@ -262,7 +294,7 @@ def parse_fwf_descrip_by_header(descrip, header,
                     no label column specified
     '''
     # parse aligned header
-    cspecs, fields=parse_aligned_header(header)
+    cspecs, fields=parse_aligned_header(header, align)
 
     # col spec
     if not isinstance(col_bytes, numbers.Number):
@@ -308,3 +340,24 @@ def parse_bytes_str(sbytes, sep='-'):
         t0, t1=byts
 
     return t0-1, t1
+
+# save to fwf
+def save_to_fwf(df, path_or_buf=None, index=False,
+                    justify=None, na_rep='NaN', **kwargs):
+    '''
+        save to fixed-width formatted text
+            using `df.to_string`
+    '''
+    kwargs.update(index=index, justify=justify, na_rep=na_rep)
+    s=df.to_string(**kwargs)
+
+    if path_or_buf is None:
+        print(s)
+        return
+
+    if isinstance(path_or_buf, str):
+        with open(path_or_buf, 'w') as f:
+            f.write(s)
+        return
+
+    path_or_buf.write(s)
