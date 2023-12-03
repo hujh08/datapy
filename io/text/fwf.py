@@ -43,8 +43,6 @@ def load_fwf_by_header(file_or_buffer, header=0, align='left', **kwargs):
     '''
     lhdr=read_nth_line(file_or_buffer, header, restore_stream=True)
     colspecs, names=parse_aligned_header(lhdr, align=align)
-    print(colspecs)
-    print(names)
 
     kwargs.update(header=header)
     return load_fwf(file_or_buffer, colspecs=colspecs, **kwargs)
