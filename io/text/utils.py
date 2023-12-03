@@ -74,7 +74,7 @@ def strip_empty_lines(doc, join_lines=True):
     return os.linesep.join(lines)
 
 # extract word in a line
-def words_in_line(line):
+def words_in_line(line, only_word_char=False):
     '''
         extract words in a line
         return
@@ -82,8 +82,21 @@ def words_in_line(line):
             where
                 words: list of word
                 spans: list of pan for each word
+                    each span (t0, t1)
+                        where line[t0:t1] is the word
+
+        :param only_word_char: bool, default False
+            whether only allow results with word chars
+                that is alphanumeric chars and underscore (_)
+                    '\\w' in `re`
+
+            if False,
+                split words by whitespace
     '''
-    p=re.compile(r'\b\w+\b')
+    if only_word_char:
+        p=re.compile(r'\b\w+\b')
+    else:
+        p=re.compile(r'(^|(?<=\s))\S+(?=\s|$)')
     matches=[(t.span(), t.group()) for t in p.finditer(line)]
     spans, words=zip(*matches)
 
