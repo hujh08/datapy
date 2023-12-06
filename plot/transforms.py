@@ -13,7 +13,8 @@ class invTransWrapper(mtrans.Transform):
     '''
         handle inverse of transform
         mainly about invalidate from child, inverse of which to be computed
-            in general, transform(values) = affine(non-affine(values)
+            in general,
+                transform(values) = affine(non-affine(values))
             for normal transform, if affine invalid passed, only affect affine part,
                 leaving non-affine unchanged.
             BUT for its inverse, the non affine should also change
@@ -26,7 +27,6 @@ class invTransWrapper(mtrans.Transform):
 
         self.input_dims=trans.output_dims
         self.output_dims=trans.input_dims
-        # self.is_affine=trans.is_affine
 
         self._trans_init=trans
         self.set_children(trans)
@@ -36,9 +36,11 @@ class invTransWrapper(mtrans.Transform):
     def _invalidate_internal(self, level, invalidating_node):
         '''
             handle invalidate for inverse
+
+            full invalid if init trans not affine
         '''
-        if (level == self.INVALID_AFFINE and not self.is_affine):
-            level=self.INVALID
+        if (level == self._INVALID_AFFINE_ONLY and not self.is_affine):
+            level=self._INVALID_FULL
 
         super()._invalidate_internal(level=level,
                                      invalidating_node=invalidating_node)
@@ -57,57 +59,84 @@ class invTransWrapper(mtrans.Transform):
         return self._trans_init
 
 # perform func to xs given in axes coordinates
-class yFuncTransFormFromAxes(mtrans.Transform):
+
+class dimProjTrans(mtrans.Transform):
     '''
-        class to transform xs in axes coordinates
+        transform to project high dimension data to one dimension
+    '''
+    def __init__(self, axis=0, ndim=2):
+        super().__init__()
+
+        self.input_dims=ndim
+        self.output_dims=1
+
+        self._paxis=axis
+
+    def transform_non_affine(self, values):
+        return values[:, self._paxis]
+
+class FuncTrans(mtrans.Transform):
+    '''
+        transform to perform a function on 1-dimension data
+    '''
+    def __init__(self, func, newaxis=1):
+        '''
+            init work
+
+            :param newaxis: int
+                new axis to put func result
+        '''
+        super().__init__()
+
+        assert callable(func)
+        self._func=func
+
+        self.input_dims=1
+        self.output_dims=2
+
+        self._yaxis_for_result=[False, True][newaxis]
+
+    def _stack_result(self, xs, results):
+        if self._yaxis_for_result:
+            arrays=[xs, results]
+        else:
+            arrays=[results, xs]
+
+        return np.column_stack(arrays)
+
+    def transform_non_affine(self, xs):
+        # perform func
+        results=self._func(xs)
+
+        return self._stack_result(xs, results)
+
+class FuncTransFormFromAxes(mtrans.CompositeGenericTransform):
+    '''
+        class to transform xs or ys in axes coordinates
             to xys of a function's graph in an axes
     '''
     pass_through=True
     has_inverse=False
 
-    def __init__(self, ax, yfunc):
-        super().__init__()
-
-        # set children to follow
+    def __init__(self, ax, func, axis_func_on=0):
         trans_d2a=ax.transScale+ax.transLimits
-        self._transxa2d=invTransWrapper(trans_d2a)
+        transxa2d=invTransWrapper(trans_d2a)
 
-        self._transdata=ax.transData
+        transdata=ax.transData
 
-        self.set_children(self._transxa2d, self._transdata)
+        axis_func_on=[0, 1][axis_func_on]
+        transfunc=dimProjTrans(axis_func_on)+\
+                  FuncTrans(func, newaxis=1-axis_func_on)
 
-        # function
-        assert callable(yfunc)
-        self._yfunc=yfunc
+        super().__init__(transxa2d+transfunc, transdata)
 
-        self.input_dims=self.output_dims=2
-
-    def _invalidate_internal(self, level, invalidating_node):
-        '''
-            handle invalidate for inverse
-        '''
-        if (level == self.INVALID_AFFINE and
-            invalidating_node is self._transxa2d):
-            level=self.INVALID
-
-        super()._invalidate_internal(level=level,
-                                     invalidating_node=invalidating_node)
-
-    def get_affine(self, *args):
-        return self._transdata.get_affine()
-
-    def transform_non_affine(self, values):
-        # axes to data
-        values=self._transxa2d.transform(values)
-
-        # perform yfunc
-        xs=values[:, 0]
-        values=np.column_stack([xs, self._yfunc(xs)])
-
-        # tranform data
-        values=self._transdata.transform_non_affine(values)
-
-        return values
+class yFuncTransFormFromAxes(FuncTransFormFromAxes):
+    '''
+        class to transform xs in axes coordinates
+            to xys of a function's graph in an axes
+    '''
+    def __init__(self, ax, yfunc):
+        super().__init__(ax, yfunc, 0)
 
 # composited scale transform
 class CompositeAxisScaleTrans(mtrans.Transform):
