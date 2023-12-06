@@ -33,14 +33,14 @@ class invTransWrapper(mtrans.Transform):
 
     is_affine=property(lambda self: self._trans_init.is_affine)
 
-    def _invalidate_internal(self, value, invalidating_node):
+    def _invalidate_internal(self, level, invalidating_node):
         '''
             handle invalidate for inverse
         '''
-        if (value == self.INVALID_AFFINE and not self.is_affine):
-            value=self.INVALID
+        if (level == self.INVALID_AFFINE and not self.is_affine):
+            level=self.INVALID
 
-        super()._invalidate_internal(value=value,
+        super()._invalidate_internal(level=level,
                                      invalidating_node=invalidating_node)
 
     def get_affine(self):
@@ -82,15 +82,15 @@ class yFuncTransFormFromAxes(mtrans.Transform):
 
         self.input_dims=self.output_dims=2
 
-    def _invalidate_internal(self, value, invalidating_node):
+    def _invalidate_internal(self, level, invalidating_node):
         '''
             handle invalidate for inverse
         '''
-        if (value == self.INVALID_AFFINE and
+        if (level == self.INVALID_AFFINE and
             invalidating_node is self._transxa2d):
-            value=self.INVALID
+            level=self.INVALID
 
-        super()._invalidate_internal(value=value,
+        super()._invalidate_internal(level=level,
                                      invalidating_node=invalidating_node)
 
     def get_affine(self, *args):
@@ -101,7 +101,7 @@ class yFuncTransFormFromAxes(mtrans.Transform):
         values=self._transxa2d.transform(values)
 
         # perform yfunc
-        xs, _=values.T
+        xs=values[:, 0]
         values=np.column_stack([xs, self._yfunc(xs)])
 
         # tranform data
