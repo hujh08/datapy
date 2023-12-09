@@ -58,7 +58,7 @@ def sort_values_by_key(df, by, key=None, vectorized=False, **kwargs):
                 it will apply to each element in Index, instead whole object
     '''
     key=_norm_sort_key(key, vectorized=vectorized)
-    return df.sort_values(by, key=_norm_sort_key(key), **kwargs)
+    return df.sort_values(by, key=key, **kwargs)
 
 def sort_index_by_key(df, key, vectorized=False, **kwargs):
     '''
@@ -69,7 +69,7 @@ def sort_index_by_key(df, key, vectorized=False, **kwargs):
                 it will apply to each element in Index, instead whole object
     '''
     key=_norm_sort_key(key, vectorized=vectorized)
-    return df.sort_index(key=np.vectorize(key), **kwargs)
+    return df.sort_index(key=key, **kwargs)
 
 ## auxiliary functions
 def _list_to_sortkey(klist):
