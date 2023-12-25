@@ -39,6 +39,18 @@ subparser.add_argument('srcpath', help='src path for relpath')
 
 subparser.set_defaults(func=handle_relpath)
 
+## expand path by user
+def handle_expandpath(args):
+    print(os.path.expanduser(args.path))
+
+subparser=subparsers.add_parser('expand',
+                                description='expand path for user',
+                                help='expand ~ and ~user')
+
+subparser.add_argument('path', help='path in file system')
+
+subparser.set_defaults(func=handle_expandpath)
+
 ## join path
 def handle_join_path(args):
     print(os.path.join(*args.paths))
