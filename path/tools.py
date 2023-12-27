@@ -8,6 +8,7 @@ import os, sys
 from pathlib import Path
 
 __all__=['dirname', 'dirname_path',
+         'rebase_relpath',
          'find_sub_in_parent', 'add_lib_in_parent']
 
 # posix dirname
@@ -35,6 +36,14 @@ def dirname_path(p):
             implemented by `pathlib.Path`
     '''
     return str(Path(p).parent)
+
+# rebase relpath
+def rebase_relpath(path, newbase, oldbase='.'):
+    '''
+        rebase relpath to new base path
+    '''
+    path=os.path.join(oldbase, path)
+    return os.path.relpath(path, newbase)
 
 # parent path containing given sub file
 def find_sub_in_parent(sub, return_rel=True, find_all=False):

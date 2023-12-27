@@ -7,7 +7,7 @@
 import os, sys
 import argparse
 
-from .tools import find_sub_in_parent
+from .tools import find_sub_in_parent, rebase_relpath
 
 # construct argument parser
 parser=argparse.ArgumentParser(description='operations of path')
@@ -38,6 +38,23 @@ subparser.add_argument('path', help='target path in file system')
 subparser.add_argument('srcpath', help='src path for relpath')
 
 subparser.set_defaults(func=handle_relpath)
+
+## relative path
+def handle_rebase(args):
+    pargs=(args.path, args.newbase)
+    if args.oldbase is not None:
+        pargs+=(args.oldbase,)
+    print(rebase_relpath(*pargs))
+
+subparser=subparsers.add_parser('rebase',
+                                description='rebase relpath to new dir',
+                                help='rebase relpath')
+
+subparser.add_argument('path', help='relpath to rebase')
+subparser.add_argument('newbase', help='new base dir')
+subparser.add_argument('oldbase', help='old base dir', nargs='?')
+
+subparser.set_defaults(func=handle_rebase)
 
 ## expand path by user
 def handle_expandpath(args):
