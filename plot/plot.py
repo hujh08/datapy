@@ -8,7 +8,7 @@ import numpy as np
 import numbers
 
 import pandas as pd
-from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.colors as mcolors
 
 from ._tools_plot import filter_by_lim, calc_density_map_2d, quants_to_levels
 from .colors import get_next_color_in_cycle
@@ -20,7 +20,8 @@ from ._tools_class import bind_new_func_to_instance_by_trans
 __all__=['plot_hist', 'plot_cumul',
          'plot_2d_hist', 'plot_2d_contour', 'plot_2d_scatter',
          'plot_2d_bins',
-         'plot_2d_joint']
+         'plot_2d_joint',
+         'imshow_boolmat']
 
 # distribution plot
 
@@ -564,3 +565,20 @@ def plot_2d_joint(axs, xs, ys,
 
         axx.set_ylim([h0, h1])
         axy.set_xlim([h0, h1])
+
+# imshow
+
+def imshow_boolmat(ax, bmat, color='red', alpha=None, **kwargs):
+    '''
+        imshow of bool matrix
+    '''
+    bmat=bmat.astype(bool)
+
+    if alpha is not None:
+        color=(color, alpha)
+
+    cmap=mcolors.ListedColormap([color])\
+                .with_extremes(under='none')
+    bounds=[0.5, 1.5]
+    norm=mcolors.BoundaryNorm(bounds, cmap.N)
+    ax.imshow(bmat, **kwargs, norm=norm, cmap=cmap)

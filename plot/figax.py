@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .layout import RectManager, Rect
+from ._tools_layout import (is_fig_obj, is_axes_obj)
 
 __all__ = ['get_figaxes_grid', 'get_figaxes_in_axes',
            'get_figaxes_joint', 'get_figaxes_residual']
@@ -105,7 +106,7 @@ def get_figaxes_grid(nrows=1, ncols=1,
 
                     see `RectGrid.grid_dist_by_unit` for detail
 
-            at: None, `plt.figure`, `plt.Axes`, `Rect`
+            at: None, `plt.figure`, `plt.Axes`, `Rect` or list of `plt.Axes`
                 where to create the axes
 
             figsize: None, or (float, float)
@@ -200,14 +201,19 @@ def get_figaxes_grid(nrows=1, ncols=1,
     else:
         manager=RectManager()
 
-        if at is None or isinstance(at, plt.Figure):
-            grid=manager.add_grid(nx=ncols, ny=nrows)
-            if isinstance(at, plt.Figure):
+        kws1=dict(nx=ncols, ny=nrows)
+        if at is None or is_fig_obj(at):
+            grid=manager.add_grid(**kws1)
+            if is_fig_obj(at):
                 manager.set_figure(at)
-        elif isinstance(at, plt.Axes):
-            grid=manager.add_grid_in_axes(at, nx=ncols, ny=nrows)
-        else:
-            raise TypeError(f'unexpected type for `at`: {type(at)}')
+        elif is_axes_obj(at):
+            grid=manager.add_grid_in_axes(at, **kws1)
+        else:  # multiply axes
+            at=tuple(at)
+            if not all(map(is_axes_obj, at)):
+                s='got unexpected type in `at`'
+                raise TypeError(s)
+            grid=manager.add_grid_by_covering_axes(*at, **kws1)
 
     # constraints
     grid.set_grid_dists(loc=loc, locing=locing, locunits=locunits,
@@ -234,21 +240,25 @@ def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], locing='wh',
     '''
         create subplots in existed axis
 
-        :param loc, locing: location in axes
+        Parameters:
+            loc, locing: location in axes
+                default
+                    loc: [0.1, 0.8]
+                    locing: 'wh'
 
-        :param replace: bool, default False
-            whether to remove the old given `axes`
+            replace: bool, default False
+                whether to remove the old given `axes`
 
-        other optional kwargs:
-            used for ratios in grid
-            same as `get_figaxes_grid`
+            other optional kwargs:
+                used for ratios in grid
+                same as `get_figaxes_grid`
 
-            including (with default):
-                ratios_w=1,
-                ratios_h=None,
-                wspaces=0.01,
-                hspaces=None,
-                ratio_wh=None
+                some args default:
+                    ratios_w=1,
+                    ratios_h=None,
+                    wspaces=0.01,
+                    hspaces=None,
+                    ratio_wh=None
     '''
     # create axes
     _, axes1=get_figaxes_grid(nrows=nrows, ncols=ncols, loc=loc, locing=locing,

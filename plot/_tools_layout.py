@@ -5,7 +5,25 @@
 '''
 
 from collections import abc
+
 import numpy as np
+import matplotlib.pyplot as plt
+
+# type check
+def is_fig_obj(t):
+    return isinstance(t, plt.Figure)
+
+def is_axes_obj(t):
+    return isinstance(t, plt.Axes)
+
+# check function
+def check_axis(axis):
+    '''
+        check axis
+    '''
+    axs=list('xy')
+    if axis not in axs:
+        raise ValueError('only allow x, y for axis')
 
 # nested collection
 ## map function to nested collection

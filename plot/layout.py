@@ -42,10 +42,14 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
 from .linear import LinearManager, LnComb
-from ._tools_layout import map_to_nested, squeeze_nested, confirm_arg_in
+from ._tools_layout import (is_fig_obj, is_axes_obj,
+                            check_axis,
+                            map_to_nested, squeeze_nested,
+                            confirm_arg_in)
 from .size import Units, fontsize_in_pts
 from ._tools_class import add_proxy_method
 from .params import params_create_axes
+from .tools import set_axis_share
 
 class RectManager:
     '''
@@ -135,6 +139,29 @@ class RectManager:
         '''
         return self._root_rect._add_grid(nx=nx, ny=ny)
 
+    def add_grid_by_extent(self, extent, nx=1, ny=1, unit='px'):
+        '''
+            add grid for given extent
+
+            Paramters:
+                extent: (x0, y0, x1, y1)
+                    extent of grid to add
+
+                unit: default 'px'
+                    unit for extent
+        '''
+        rect_root=self.add_grid(1, 1).get_rect(0)  # add a layer
+
+        x0, y0, x1, y1=extent
+        unitx=unity=self.get_size_unit(unit)
+
+        rect_root.x0=x0*unitx
+        rect_root.y0=y0*unity
+        rect_root.x1=x1*unitx
+        rect_root.y1=y1*unity
+
+        return rect_root.add_grid(nx=nx, ny=ny)
+
     def add_grid_in_axes(self, axes, nx=1, ny=1):
         '''
             add grid to an existed axes
@@ -146,27 +173,69 @@ class RectManager:
                 nx, ny: int
                     ncols, ncols of grid
         '''
-        assert isinstance(axes, plt.Axes),\
-               'only support `plt.Axes` to add grid in'
+        if not is_axes_obj(axes):
+            s='only support `plt.Axes` to add grid in'
+            raise ValueError(s)
 
         # figure
         fig=axes.get_figure()
         self.set_figure(fig)
 
-        rect_root=self.add_grid(1, 1).get_rect(0)  # add a layer
+        # extent of axes
+        extent=axes.bbox.extents  # position in pixel
 
-        # position of axes
-        x0, y0, x1, y1=axes.bbox.extents  # position in pixel
-        unitx=unity=self.get_size_unit('px')
+        kws=dict(unit='px', nx=nx, ny=ny)
+        return self.add_grid_by_extent(extent, **kws)
 
-        rect_root.x0=x0*unitx
-        rect_root.y0=y0*unity
-        rect_root.x1=x1*unitx
-        rect_root.y1=y1*unity
+    def add_grid_by_covering_axes(self, axes, *axs, nx=1, ny=1):
+        '''
+            add grid to covering multiply axes
 
-        grid=rect_root.add_grid(nx=nx, ny=ny)
+            Parameters:
+                axs: tuple of `plt.Axes` instance
+                    collection of axes to add grid covering
 
-        return grid
+                nx, ny: int
+                    ncols, ncols of grid
+        '''
+        axs=(axes,)+axs
+        if not all(map(is_axes_obj, axs)):
+            s='only support `plt.Axes` for grid'
+            raise ValueError(s)
+
+        # figure
+        fig=axs[0].get_figure()
+        for ax in axs[1:]:
+            if ax.get_figure() is not fig:
+                s='got axes in different figures'
+                raise ValueError(s)
+        self.set_figure(fig)
+
+        # extent
+        extent=self.extents_of_axes(*axs)  # position in pixel
+        kws=dict(unit='px', nx=nx, ny=ny)
+        return self.add_grid_by_extent(extent, **kws)
+
+    @staticmethod
+    def extents_of_axes(axes, *axs):
+        '''
+            extents of multiply axes
+
+            return (x0, y0, x1, y1)
+                position of box covering all axes
+                    in unit of 'pixel'
+        '''
+        axs=(axes,)+axs
+
+        axexts=[]
+        for ax in axs:
+            axexts.append(list(ax.bbox.extents))
+
+        xyextents=list(zip(*axexts))
+        x0, y0=map(min, xyextents[:2])
+        x1, y1=map(max, xyextents[2:])
+
+        return x0, y0, x1, y1
 
     # getter, setter for root rect
     for k_ in 'width height'.split():
@@ -657,8 +726,9 @@ class RectManager:
         '''
             set an exsited figure to manager
         '''
-        assert isinstance(fig, plt.Figure),\
-               'only support set to Figure instance'
+        if not is_fig_obj(fig):
+            s='only support set to Figure instance'
+            raise TypeError(s)
 
         if self._fig is not None:  # already created
             if self._fig is fig:
@@ -1706,9 +1776,7 @@ class RectGrid:
                                                     lab=True, pad=True)
 
         '''
-        if axis not in ['x', 'y']:
-            s=f'unexpected `axis` for unit dist: {axis}'
-            raise ValueError(s)
+        check_axis(axis)
 
         # LnComb-like type
         if hasattr(unit, 'to_lncomb'):
@@ -2245,8 +2313,7 @@ class RectGrid:
             fset(ratios, 'y', origin_upper=origin_upper)
             return
 
-        assert axis in list('xy'), \
-                "only support 'x', 'y' for axis"
+        check_axis(axis)
 
         # dists
         s=dict(x='width', y='height')[axis]
@@ -2344,7 +2411,7 @@ class RectGrid:
             self.set_heights_equal()
             return
 
-        assert axis in ['x', 'y']
+        check_axis(axis)
         if axis=='x':
             self.set_widths_equal()
         else:
@@ -2429,8 +2496,7 @@ class RectGrid:
             fset(dist0, ratios, 'y', origin_upper=origin_upper)
             return
 
-        assert axis in list('xy'), \
-                "only support 'x', 'y', 'both' for axis"
+        check_axis(axis)
 
         # dist0
         if not isinstance(dist0, LineSeg1D):
@@ -2655,7 +2721,7 @@ class RectGrid:
         ## locunits
         if locunits is None:
             u=self.unit_of_rect_dist(prect, axis)
-            locunits=(u, u)
+            locunits=(u,)*2
         elif len(locunits)!=2:
             s=f'unexpected `locunits` with len {len(locunits)}'
             raise ValueError(s)
@@ -2832,14 +2898,14 @@ class RectGrid:
 
         ## locunits
         if locunits is None:
-            xlu, ylu=prect.width, prect.height
+            xlu, ylu=(prect.width,)*2, (prect.height,)*2
         else:
             xlu, ylu=self._parse_arg_loc_params_tuple(locunits)
 
         # set loc for both axis individually
-        flset_axis=self._base_set_loc_by_axis
-        flset_axis(prect, 'x', xloc, locing=xlhow, locunits=xlu)
-        flset_axis(prect, 'y', yloc, locing=ylhow, locunits=ylu)
+        floc_ax=self._base_set_loc_by_axis
+        floc_ax(prect, 'x', xloc, locing=xlhow, locunits=xlu)
+        floc_ax(prect, 'y', yloc, locing=ylhow, locunits=ylu)
 
     ### auxiliary functions
     @staticmethod
@@ -3292,7 +3358,7 @@ class Rect:
                 i: 0, 1 or -1
                     index of point along an axis
         '''
-        assert axis in list('xy')
+        check_axis(axis)
 
         i=[0, 1][i]
 
@@ -3525,9 +3591,7 @@ class Rect:
 
             also standardize to 0, 1, float or 'both'
         '''
-        assert axis in list('xy'), \
-            'only support x or y axis, ' \
-            'but got '+str(axis)
+        check_axis(axis)
 
         if isinstance(anchor, numbers.Number):
             if anchor==11:
@@ -3708,8 +3772,6 @@ class Rect:
                 other: Rect, Axes
                     other axes to share
         '''
-        check_axis(axis)
-
         if not self.has_axes():
             if ignore_nonexists:
                 return
@@ -3727,14 +3789,8 @@ class Rect:
         elif not isinstance(other, Axes):
             raise TypeError('only allow type `Rect` or `Axes` for `other`')
 
-        # grouper for axis share: `matplotlib.cbook.Grouper`
-        grp=getattr(axes, 'get_shared_%s_axes' % axis)()
-
-        ## already shared
-        if grp.joined(axes, other):
-            return
-
-        getattr(axes, 'share'+axis)(other)
+        # share axis
+        set_axis_share(axis, axes, other)
 
     # to string
     def __repr__(self):
@@ -4152,14 +4208,6 @@ def _parse_ratios(ratios, n):
         'but got %i' % (n, n-1, len(ratios))
 
     return ratios
-
-## check function
-def check_axis(axis):
-    '''
-        check axis
-    '''
-    axs=list('xy')
-    assert axis in axs, 'only allow xy for axis'
 
 ## special list type
 class SetterList(list):
