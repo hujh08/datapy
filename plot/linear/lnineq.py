@@ -23,9 +23,9 @@
         which is then handled by the cooperating `LnEqs` object
 '''
 
-from .bases import LnCoeffs, LnComb
-from .tools import PrecisceComparator, NormComp, \
-                   insert_iter_to_list, iter_prod, get_indent
+from .bases import LnCoeffs, LnComb, LnConflictError
+from .tools import (PrecisceComparator, NormComp,
+                    insert_iter_to_list, iter_prod, get_indent)
 
 class LnIneqs:
     '''

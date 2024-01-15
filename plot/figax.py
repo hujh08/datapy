@@ -16,15 +16,16 @@ __all__ = ['get_figaxes_grid', 'get_figaxes_in_axes',
 
 # axes in grid
 def get_figaxes_grid(nrows=1, ncols=1,
-                        loc=[0.1, 0.8], locing='wh', locunits=None,
+                        loc=[0.1, 0.8], locing=None, locunits=None,
                         at=None, figsize=None,
                         rects='row', origin_upper=False,
                         sharex=False, sharey=False,
                         return_mat=True, squeeze=True,
                         wspaces=0.01, hspaces=0.01,
                         wpunits=None, hpunits=None,
-                        ratios_w=1, ratios_h=1,
-                        ratio_wh=None, style='tight grid'):
+                        ratios_w=1, ratios_h=1, ratio_wh=None,
+                        minw=None, minh=None,
+                        unit_minw=None, unit_minh=None, style='tight grid'):
     '''
         axes in grid
 
@@ -48,18 +49,61 @@ def get_figaxes_grid(nrows=1, ncols=1,
                 ny, nx
 
             loc, locing, locunits, at: args to set location at parent
-                see `RectGrid.set_loc` for detail
+                specify location [x0, y0, x1, y1]
+                    see `RectGrid.set_loc` for detail
+
+                loc, locunits: params of the location
+                    (xl0, yl0, xl1, yl1)
+                    see later description for more detail
+                locing: how the params act
+
+                3 types for loc, locunits:
+                    scalar: xyl
+                        xl0=yl0=xl1=yl1=xyl
+                        only scalar `loc` when `locing='margin'`
+                    2-tuple: (xyl0, xyl1)
+                        (xl0, xl1)=(xl1, yl1)=(xyl0, xyl1)
+                    4-tuple: (xl0, yl0, xl1, yl1)
+
+                locing: None, 'wh', 'xy', 'margin', 'm',
+                            or 2-str of 'xwm', default: None
+                    default None:
+                        depends on whether scalar given for `loc`
+                            'm'  if both `loc`, 'locunits' scalar
+                            'wh' otherwise
+
+                    'm': same as 'margin'
+
+                    2-str of 'xwm':
+                        e.g. 'xx', 'ww', 'mm'
 
                 `locunits`: list of dist units
                     3 type supported for unit: str, int, or `LnComb`-like
                         LnComb-like: object with `to_lncomb`
-    
                         str: 'figure', 'grid', ...
                              'inches', 'pixel', 'points', ...
-                             'ticksep'  # a function to be called on val
-    
-                        int: ith rect in grid (0th rect given by `origin_upper`)
-                see `RectGrid.get_dist_unit` for detail
+                             'ticksep[,k[,k=v]]', 'ticksep*,[k=v]'
+                        int: ith rect in grid (0th rect by `origin_upper`)
+
+                    special unit: ticksep
+                        func type unit
+                            default:
+                                ticksep(ntick=1, nlab=1, out=False,
+                                            lab=True, pad=True)
+
+                        examples of pair (val, unit):
+                            (3, 'ticksep'):
+                                            ticksep(ntick=3)
+                            ((1, 2), 'ticksep'):
+                                            ticksep(ntick=1, nlab=2)
+                            (2, 'ticksep,nlab'):
+                                            ticksep(nlab=2)
+                            (3, 'ticksep*, lab=false':
+                                            ticksep(ntick=3, lab=False)
+                            (2, 'ticksep,nlab,pad=false'):
+                                            ticksep(nlab=2, pad=True)
+
+                    see `RectGrid.grid_dist_by_unit` for detail
 
             at: None, `plt.figure`, `plt.Axes`, `Rect`
                 where to create the axes
@@ -67,11 +111,11 @@ def get_figaxes_grid(nrows=1, ncols=1,
             figsize: None, or (float, float)
                 figure size (w, h) in inches
 
-                it works only when fig not exists in `at` and
-                    w, h not determined from constraints
-
-                if ratio w/h could be determined,
-                    use as large size as possible to keep the ratio
+                acts as upper bound in a loosing way
+                    ignored if
+                        fig given in `at`, or
+                        both w, h determined from constraints, or
+                        conflict to current inequality
 
                 if None, use `plt.rcParams['figure.figsize']` 
 
@@ -85,8 +129,11 @@ def get_figaxes_grid(nrows=1, ncols=1,
 
                 if True, order of axes starts from upper-left corner
 
-            sharex, sharey: bool, or str {'all', 'row', 'col'}, or list of array of int
+            sharex, sharey: bool, or str, or list of array of int
                 specify rects to share x/y-axis
+
+                if str,
+                    'all', 'row', 'col'
 
             return_mat: bool, default: True
                 whether to return result as a matrix, with type np.ndarray
@@ -101,6 +148,12 @@ def get_figaxes_grid(nrows=1, ncols=1,
             wspaces, wpunits: kwargs to specify wspaces
             hspaces, hpunits: kwargs to specify hspaces
                 value and unit for distance of wspaces/hspaces
+                    
+                unit scalar:
+                    str: 'figure', 'prect', 'grid', 'rect', or
+                         'points', 'pixel', ... or
+                         'ticksep'
+                    int: ith rect in grid (count from bottom-left)
 
                 see `RectGrid.set_seps` for detail
 
@@ -111,16 +164,34 @@ def get_figaxes_grid(nrows=1, ncols=1,
 
                 if float, it means ratios of other rects to origin rect
 
-                if array, its len should be `nx-1`, or `nx` (`ny-1`, `ny` respectively)
+                if array, its len should be `nx-1`, or `nx` (`ny-1`, `ny`)
                     for `nx-1`, it means `[1, *ratios]`
 
-            ratio_wh: None, float, or tuple (int, float), ((int, int), float), (None, int)
-                ratio w/h for one axes or whole axes region (if given (None, int))
+            ratio_wh: None, float, or 2-tuple
+                ratio w/h for one axes or whole axes region
+                    (if given (None, int) by tuple)
+
+                if tuple,
+                    (int, float), ((int, int), float), (None, int)
 
                 if None, not set
                 if float, set for 0th rect
                 if (i, r) or ((i, j), r), set for rect in index i or (i, j)
                 if (None, r), set for whole rect
+
+            minw, minh: None, float, or 2-tuple
+                min width/height for some axes
+
+                if tuple,
+                    (int, float), ((int, int), float), (None, int)
+
+                similar as `ratio_wh`
+
+            unit_minw, unit_minh: None or str
+                unit of minw, minh
+                    None for 'inches'
+
+                same as scalar in `wpunits`, `hpunits`
     '''
     # create rects
     if isinstance(at, Rect):
@@ -144,7 +215,9 @@ def get_figaxes_grid(nrows=1, ncols=1,
                             wspaces=wspaces, wpunits=wpunits,
                             hspaces=hspaces, hpunits=hpunits,
                             ratios_w=ratios_w, ratios_h=ratios_h,
-                            ratio_wh=ratio_wh)
+                            ratio_wh=ratio_wh,
+                            minw=minw, minh=minh,
+                            unit_minw=unit_minw, unit_minh=unit_minh)
 
     # create axes
     if at is None and figsize is not None:
@@ -152,7 +225,8 @@ def get_figaxes_grid(nrows=1, ncols=1,
 
     return grid.create_axes(rects=rects, origin_upper=origin_upper,
                                 sharex=sharex, sharey=sharey,
-                                return_mat=return_mat, squeeze=squeeze, style=style)
+                                return_mat=return_mat, squeeze=squeeze,
+                                style=style)
 
 ## create subplots in existed axes
 def get_figaxes_in_axes(axes, nrows=1, ncols=1, loc=[0.1, 0.8], locing='wh',

@@ -62,6 +62,11 @@ class LinearManager:
 
         return obj
 
+    # properties
+    @property
+    def numbasis(self):
+        return self._eqs.numbasis
+
     # handle vars
     def _append_new_basis_vars(self, vs):
         '''
@@ -327,7 +332,7 @@ class LinearManager:
         return k
 
     ## eval bounds
-    def eval_bounds_of_lncomb(self, lncomb):
+    def _eval_bounds_of_lncomb(self, lncomb):
         '''
             eval lower and upper bounds of a LnComb
         '''
@@ -349,6 +354,32 @@ class LinearManager:
         ilz=indsnz[-1]
         ksc=LnCoeffs(ks[:(ilz+1)], c)
         return self._ineqs.eval_bounds_of(ksc)
+
+    def eval_bounds_of_lncomb(self, lncomb, ret_func=False):
+        '''
+            eval lower and upper bounds of a LnComb
+
+            Parameters:
+                ret_func: bool, default False
+                    whether to return test func
+
+                    if False,
+                        return tuple (lb, ub)
+
+                    otherwise,
+                        return callable class
+                            test if val in bound
+                                return  0  if lb <= v <= ub
+                                       -1  if v < lb
+                                        1  if v > ub
+        '''
+        lb, ub=self._eval_bounds_of_lncomb(lncomb)
+
+        if not ret_func:
+            return lb, ub
+
+        # construct func
+        return BoundTester(lb, ub)
 
     # print
     def info(self, indent_glob=None, indent=' '*4):
@@ -372,3 +403,54 @@ class LinearManager:
 
         ## basis
         print(gindent+'basis:', ', '.join(vbs))
+
+## auxiliary class
+class BoundTester:
+    '''
+        callable class to test if value in bound (lb, ub)
+            return  0  if lb <= v <= ub
+                   -1  if v < lb
+                    1  if v > ub
+    '''
+    def __init__(self, lb, ub):
+        self.lb, self.ub=lb, ub
+
+        if lb is None and ub is None:
+            self._func=lambda x: 0
+        elif lb is None:
+            self._func=lambda x: int(x>ub)
+        elif ub is None:
+            self._func=lambda x: -int(x<lb)
+        else:
+            assert lb<=ub
+            self._func=lambda x: int(x>ub)-int(x<lb)
+
+    def __call__(self, v, ret_bd=False):
+        '''
+            test if v in bound
+                -1, 0, 1 for < lb, [lb, ub], > ub
+
+            Parameters:
+                ret_bd: bool, default False
+                    what to return
+
+                    if False
+                        return test digit: -1, 0, 1
+                    Otherwise,
+                        return lb if v < lb
+                                v if v in [lb, ub]
+                               ub if v > ub
+
+        '''
+        t=self._func(v)
+        if not ret_bd:
+            return t
+
+        if t==-1:   # < lower bound
+            return self.lb
+        if t==1:  # > upper bound
+            return self.ub
+        return v
+
+    def __str__(self):
+        return str((self.lb, self.ub))
