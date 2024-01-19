@@ -347,7 +347,7 @@ def save_to_fwf(df, path_or_buf=None, index=False,
             using `df.to_string`
     '''
     kwargs.update(index=index, justify=justify, na_rep=na_rep)
-    s=df.to_string(**kwargs)
+    s=df.to_string(**kwargs)+'\n'
 
     if path_or_buf is None:
         print(s)

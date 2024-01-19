@@ -15,7 +15,10 @@ __all__=['xs_by_dict', 'df_loc_on_col',
          'print_df', 'print_tab',
          'has_na',
          'df_to_2dtab', 'df_count_by_group',
-         'concat_dfs', 'merge_dfs', 'merge_dfs_on_ind']
+         'rel_df',
+         'insert_column_level', 'append_column_level',
+         'concat_dfs', 'merge_dfs', 'merge_dfs_on_ind',
+         'merge_dfs_by_keys']
 
 # xs
 def xs_by_dict(df, axis=0, drop_level=True, **kwargs):
@@ -301,6 +304,94 @@ def concat_dfs(dfs, mcol=None, marks=None, ignore_index=True):
 
     return pd.concat(dfs, ignore_index=ignore_index)
 
+# values relative to a base df
+def rel_df(df, col_base, vbase, index=None, values=None,
+                        keep_base=False, suffix=None):
+    '''
+        df with form
+            index col_base col_value ...
+            i0     v0       c00      ...
+            i0     v1       c01      ...
+            ...    ...
+            i1     v0       c10      ...
+            i1     v1       c11      ...
+
+        Return df as (by `vbase=v0`)
+            index col_base col_value
+            i0     v1       c01/c00      ...
+            ...    ...
+            i1     v1       c11/c10      ...
+
+        Parameters:
+            col_base: label
+    '''
+    if index is not None:
+        df=df.set_index(index)
+
+    sbase=df[col_base]
+
+    if values is None:
+        cols=df.columns
+        mark=np.ones(len(cols), dtype=bool)
+        mark[cols.get_loc(col_base)]=0
+
+        values=cols[mark]
+    else:
+        df=df[[col_base]+list(values)]
+
+    # mark base df and other part
+    m_base=(sbase==vbase)
+    df_base=df[m_base]
+
+    df_rel=df
+    if not keep_base:
+        m_other=(~m_base)
+        df_rel=df[m_other]
+
+    # merge
+    df_merge=merge_dfs_by_keys([df_rel, df_base], keys=['rel', 'base'])
+    df_rel=df_merge['rel']
+    df_base=df_merge['base']
+
+    df_rel.loc[:, values]=df_rel[values]/df_base[values]
+
+    # other treatment
+    if suffix is not None:
+        df_rel.set_index(col_base, append=True, inplace=True)
+        df_rel=df_rel.add_suffix(suffix)
+        df_rel.reset_index(col_base, inplace=True)
+
+    ## reset index
+    if index is not None:
+        df_rel=df_rel.reset_index()
+
+    return df_rel
+
+# levels
+def insert_column_level(df, key, index=0):
+    '''
+        add new level to columns
+    '''
+    cols=df.columns
+    if isinstance(cols, pd.MultiIndex):
+        ckeys=[list(t) for t in cols]
+    else:
+        ckeys=[[t] for t in cols]
+
+    # insert key
+    for t in ckeys:
+        t.insert(index, key)
+
+    mcols=pd.MultiIndex.from_tuples(map(tuple, ckeys))
+    return df.set_axis(mcols, axis='columns')
+
+def append_column_level(df, key):
+    cols=df.columns
+
+    is_multi=isinstance(cols, pd.MultiIndex)
+    n=cols.nlevels if is_multi else 1
+    return insert_column_level(df, key, index=n)
+
 # merge multi dfs
 def merge_dfs(dfs, suffixes=None, on=None, **kwargs):
     '''
@@ -360,5 +451,58 @@ def merge_dfs(dfs, suffixes=None, on=None, **kwargs):
 def merge_dfs_on_ind(dfs, **kwargs):
     '''
         merge dataframes on index
+
+        if keys is not None,
+            add new levels to cols
     '''
     return merge_dfs(dfs, left_index=True, right_index=True, **kwargs)
+
+def merge_dfs_by_keys(dfs, keys=None, on=None, reset_on=False, **kwargs):
+    '''
+        merge dfs with given keys
+            based on index
+
+        Parameters:
+            keys: None or list of str
+                keys to add at outermost level of column
+
+                if None,
+                    use '1', '2', ...
+            on: None or label
+                columns to merge on for all dfs
+
+                if None,
+                    use index
+    '''
+    # some check
+    if kwargs.get('suffixes', None) is not None:
+        s="can only set arg 'keys' OR 'suffixes'"
+
+    if keys is None:
+        keys=[str(i+1) for i in range(len(dfs))]
+    else:
+        if len(keys)!=len(dfs):
+            s='mismatch len between `dfs` and `keys`'
+            raise ValueError(s)
+
+        k0=keys[0]
+        if any(map(lambda k: k==k0, keys[1:])):
+            s='duplicated keys exist'
+            raise ValueError(s)
+
+    # set index if `on` not None
+    if on is not None:
+        dfs=[df.set_index(on) for df in dfs]
+
+    # insert new level
+    dfs=[insert_column_level(df, k, 0)
+                        for df, k in zip(dfs, keys)]
+
+    df=dfs[0]
+    for dfi in dfs[1:]:
+        df=df.merge(dfi, left_index=True, right_index=True)
+
+    if on is not None and reset_on:
+        df=df.reset_index()
+
+    return df
