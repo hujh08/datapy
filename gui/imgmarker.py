@@ -18,13 +18,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from .. import plot as dplt
 from ._funcs import listdir, rand_ind, read_img
 
 class imgMarker:
     '''
         class for image marker
     '''
-    def __init__(self, imgs=None, iter_rand=None, mark_forward=None, **kwargs):
+    def __init__(self, imgs=None, iter_rand=None, mark_forward=None,
+                        h_layout=True, **kwargs):
         '''
             initiation work
 
@@ -49,10 +51,14 @@ class imgMarker:
                 mark_forward: bool, or None
                     whether to go forward straightly after mark
 
+                h_layout: bool, default True
+                    how to layout image axes and text axes 
+                        horizontally or vertically
+
                 optional kwargs: other args for GUI
         '''
         self._init_imgs_holder()
-        self._init_gui()
+        self._init_gui(h_layout=h_layout)
 
         if imgs is None:
             return
@@ -326,7 +332,7 @@ class imgMarker:
         self._sort_imgs(**kwargs)
 
     # GUI: default setup
-    def _init_gui(self):
+    def _init_gui(self, h_layout=True):
         '''
             init gui
 
@@ -339,7 +345,7 @@ class imgMarker:
         self._args_gui={}
 
         # graphical interface
-        self._init_gui_graph()
+        self._init_gui_graph(h_layout=h_layout)
 
         # images iterator
         self._init_gui_args_imgiter()
@@ -389,7 +395,7 @@ class imgMarker:
         self._args_gui['mark_forward']=bool(mod)
 
     # GUI: graphical interface
-    def _init_gui_graph(self):
+    def _init_gui_graph(self, h_layout=True):
         '''
             init graphical interface,
                 including arguments for plot, and
@@ -398,7 +404,7 @@ class imgMarker:
         print('init args for graph')
 
         # layout of plt axes
-        self._init_gui_args_graph_plt()
+        self._init_gui_args_graph_plt(h_layout=h_layout)
 
         # key press event
         self._init_gui_graph_keypress()
@@ -421,7 +427,7 @@ class imgMarker:
         self._clear_gui_graph_plt()
 
     ## plot axes
-    def _init_gui_args_graph_plt(self):
+    def _init_gui_args_graph_plt(self, h_layout=True):
         '''
             init args for plot in GUI
 
@@ -431,6 +437,8 @@ class imgMarker:
         print('init args for graph plot')
 
         self._alloc_new_gui_args(
+            h_layout=h_layout,
+
             # figure size
             figsize=None,
 
@@ -441,11 +449,11 @@ class imgMarker:
             h_axs_fig=0.9,
             w_axs_fig=0.9,
 
-            # ratio of left margin to right
-            ratio_margin_lr=0.7,
+            # ratio of left/btm margin to right/top
+            ratio_margins=0.1,
 
             # text
-            xy_text=(0.3, 0.95), # in ax.transAxes
+            xy_text=(0.1, 0.95), # in ax.transAxes
             ha_text='left',
             va_text='top'
             )
@@ -455,52 +463,49 @@ class imgMarker:
             new plot axes for GUI
         '''
         print('new graph plt')
+
+        h_layout=self._get_gui_arg('h_layout')
+        print('    horizontal layout:', h_layout)
+
         # figure
         figsize=self._get_gui_arg('figsize')
-        self._fig=plt.figure(figsize=figsize)
-
-        w, h=self._fig.get_size_inches()
-
-        # setup for 2 axes
         r_ti=self._get_gui_arg('ratio_txt_img')
-
-        h_axs_fig=self._get_gui_arg('h_axs_fig')
         w_axs_fig=self._get_gui_arg('w_axs_fig')
+        h_axs_fig=self._get_gui_arg('h_axs_fig')
+        rmargs=self._get_gui_arg('ratio_margins')  # left/right, btm/top
 
-        r_lr=self._get_gui_arg('ratio_margin_lr')
-
-        ## equal size for image ax
-        w_img_inch=w*w_axs_fig/(1+r_ti)
-        h_img_inch=h*h_axs_fig
-
-        if h_img_inch<w_img_inch:
-            w_axs_fig=(h_img_inch/w)*(1+r_ti)
-        else:
-            h_axs_fig=w_img_inch/h
-
-        ## left, bottom
         assert 0<w_axs_fig<=1 and 0<h_axs_fig<=1
-        laxs=(1-w_axs_fig)*r_lr/(1+r_lr)
-        baxs=(1-h_axs_fig)/2
+        if h_layout:
+            xy0=(1-w_axs_fig)*rmargs/(1+rmargs), (1-h_axs_fig)/2
+        else:
+            xy0=(1-w_axs_fig)/2, (1-h_axs_fig)*rmargs/(1+rmargs)
+        x0, y0=xy0
+
+        kws=dict(figsize=figsize,
+                    loc=[x0, y0, w_axs_fig, h_axs_fig], locing='wh',
+                 ratio_wh=1,
+                    wspaces=0, hspaces=0, origin_upper=False)
+
+        if h_layout:
+            kws.update(nrows=1, ncols=2, ratios_w=[1, r_ti])
+        else:
+            kws.update(nrows=2, ncols=1, ratios_h=[1, r_ti])
+
+        fig, [imgax, txtax]=dplt.subplots(**kws)
+
+        self._fig=fig
 
         # image axes
-        left=laxs
-        width=w_axs_fig/(1+r_ti)
+        imgax.set_label('image')
+        imgax.axis('off')
 
-        btm=baxs
-        height=h_axs_fig
+        self._imgax=imgax
 
-        rect=[left, btm, width, height]
-        self._imgax=self._fig.add_axes(rect, label='image')
-        self._imgax.axis('off')
+        # text axes
+        txtax.set_label('text')
+        txtax.axis('off')
 
-        # text box
-        left+=width
-        width*=r_ti
-
-        rect=[left, btm, width, height]
-        self._txtax=self._fig.add_axes(rect, label='text')
-        self._txtax.axis('off')
+        self._txtax=txtax
 
     def _clear_gui_graph_plt(self):
         '''
