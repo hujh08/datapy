@@ -15,6 +15,7 @@ import pickle
 
 from scipy.special import erf
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from ._funcs import listdir, rand_ind, read_img
@@ -530,7 +531,7 @@ class imgMarker:
             callback for close event
         '''
         # print('close event:', event.__dict__)
-        print('close event:', list(event.__dict__.keys()))
+        # print('close event:', list(event.__dict__.keys()))
 
         self._clear_gui()
 
@@ -541,7 +542,7 @@ class imgMarker:
             callback for key press event
         '''
         # print('key press event:', event.__dict__)
-        print('key press event:', list(event.__dict__.keys()))
+        # print('key press event:', list(event.__dict__.keys()))
 
         iax=event.inaxes
         print('    inaxes:', iax if iax is None else iax._label)
@@ -601,6 +602,13 @@ class imgMarker:
             return lambda: f(m)
 
         return None  # None for non-existed key
+
+    def _get_act_by_key(self, act):
+        '''
+            get key for given act
+        '''
+        m=dict([(a, k) for k, a in self._keys_act.items()])
+        return m[act]
 
     ### setter for key press
     def _modify_key_act(self, act, key):
@@ -766,8 +774,7 @@ class imgMarker:
         img=read_img(imgpath)
 
         ax=self._imgax
-        if ax.images:
-            ax.images.clear()
+        self._clear_ax_images(ax)
 
         ax.imshow(img)
 
@@ -801,9 +808,25 @@ class imgMarker:
         ha=self._get_gui_arg('ha_text')
         va=self._get_gui_arg('va_text')
         ax=self._txtax
-        if ax.texts:
-            ax.texts.clear()
+        self._clear_ax_texts(ax)
         ax.text(*xy, msg, transform=ax.transAxes, ha=ha, va=va)
+
+    ## auxiliary functions
+    @staticmethod
+    def _clear_ax_artists(ax, art):
+        '''
+            clear ax artists
+        '''
+        for art in getattr(ax, art):
+            art.remove()
+
+    @classmethod
+    def _clear_ax_images(cls, ax):
+        cls._clear_ax_artists(ax, 'images')
+
+    @classmethod
+    def _clear_ax_texts(cls, ax):
+        cls._clear_ax_artists(ax, 'texts')
 
     # GUI: images iterator
     def _init_gui_args_imgiter(self):
@@ -1151,7 +1174,8 @@ class imgMarker:
         '''
             mainloop for the GUI
         '''
-        print('mainloop of GUI')
+        qkey=self._get_act_by_key('quit')
+        print(f'mainloop of GUI. press [{qkey}] to quit')
         print()
 
         plt.show()
@@ -1430,6 +1454,15 @@ class imgMarker:
                 f.write('%s %s\n' % (name, mark))
 
         return len(marks)
+
+    ### to other format
+    def image_marks_by_df(self, columns=None, **kws):
+        if columns is None:
+            columns=['name', 'mark']
+        
+        marks=self.get_marks_images(**kws)
+        df=pd.DataFrame(marks, columns=columns)
+        return df
 
     ## dump and restore record
     def dump_record(self, fname):
