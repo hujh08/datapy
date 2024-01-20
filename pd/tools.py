@@ -60,7 +60,8 @@ def sort_values_by_key(df, by, key=None, vectorized=False, **kwargs):
             if callable and not `vectorized`,
                 it will apply to each element in Index, instead whole object
     '''
-    key=_norm_sort_key(key, vectorized=vectorized)
+    if key is not None:
+        key=_norm_sort_key(key, vectorized=vectorized)
     return df.sort_values(by, key=key, **kwargs)
 
 def sort_index_by_key(df, key, vectorized=False, **kwargs):
