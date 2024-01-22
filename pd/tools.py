@@ -16,6 +16,7 @@ __all__=['xs_by_dict', 'df_loc_on_col',
          'has_na',
          'df_to_2dtab', 'df_count_by_group',
          'rel_df',
+         'flat_columns',
          'insert_column_level', 'append_column_level',
          'concat_dfs', 'merge_dfs', 'merge_dfs_on_ind',
          'merge_dfs_by_keys']
@@ -369,6 +370,35 @@ def rel_df(df, col_base, vbase, index=None, values=None,
     return df_rel
 
 # levels
+def flat_columns(df, join='_'):
+    '''
+        flat df column
+        if not MultiIndex for df columns,
+            nothing done
+
+        Parameters:
+            join: str or callable
+                how to join column levels
+                    f(levels) ==> flat key
+
+                if str,
+                    means str.join
+    '''
+    cols=df.columns
+    if not isinstance(cols, pd.MultiIndex):
+        return df  # already flat
+
+    if isinstance(join, str):
+        join=lambda levels, t=join: t.join(levels)
+    elif not callable(join):
+        s='only allow str or callable for `join`'
+        raise ValueError(s)
+
+    # flat cols
+    fcols=[join(t) for t in cols]
+
+    return df.set_axis(fcols, axis='columns')
+
 def insert_column_level(df, key, index=0):
     '''
         add new level to columns
@@ -501,7 +531,7 @@ def merge_dfs_by_keys(dfs, keys=None, on=None, reset_on=False, **kwargs):
 
     df=dfs[0]
     for dfi in dfs[1:]:
-        df=df.merge(dfi, left_index=True, right_index=True)
+        df=df.merge(dfi, left_index=True, right_index=True, **kwargs)
 
     if on is not None and reset_on:
         df=df.reset_index()
