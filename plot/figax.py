@@ -71,6 +71,7 @@ def get_figaxes_grid(nrows=1, ncols=1,
                     default None:
                         depends on whether scalar given for `loc`
                             'm'  if both `loc`, 'locunits' scalar
+                                    or `locunits` is 'ticksep'
                             'wh' otherwise
 
                     'm': same as 'margin'

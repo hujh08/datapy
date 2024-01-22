@@ -1824,7 +1824,8 @@ class RectGrid:
         uname, *kvitems=unit.split(',')
         kvitems=[t.strip() for t in kvitems]
 
-        m_nord_kv=(uname.endswith('*'))*2+(kvitems[0]=='*')
+        m_nord_kv=(uname.endswith('*'))*2+\
+                        (bool(kvitems) and kvitems[0]=='*')
         if m_nord_kv==3:
             s=f'duplicated `*` in func unit: {repr(unit)}'
             raise ValueError(s)
@@ -2645,6 +2646,7 @@ class RectGrid:
                     default None:
                         depends on whether scalar given for `loc`
                             'm' if both `loc`, 'locunits' scalar
+                                    or `locunits` is 'ticksep'
                             'w' otherwise
                     only allow 'm' if both 'loc', 'locunits' scalar
 
@@ -2694,6 +2696,7 @@ class RectGrid:
         m_scalar=self._is_scalar_loc(loc)*2+\
                  self._is_scalar_locunits(locunits)
         both_scalar=(m_scalar==3)
+        default_mlocing=both_scalar
 
         if both_scalar:  # both scalar
             u=self.grid_dist_by_unit(locunits, axis, loc)
@@ -2701,6 +2704,8 @@ class RectGrid:
         elif m_scalar==2:
             loc=(loc,)*2
         elif m_scalar:
+            if locunits=='ticksep':
+                default_mlocing=True
             locunits=(locunits,)*2
 
         ## loc
@@ -2710,7 +2715,7 @@ class RectGrid:
 
         ## locing
         if locing is None:
-            locing='m' if both_scalar else 'w'
+            locing='m' if default_mlocing else 'w'
         elif not self._is_valid_locing_ax(locing):
             s=f'unexpected `locing`: {locing}'
             raise ValueError(s)
@@ -2775,6 +2780,7 @@ class RectGrid:
                     default None:
                         depends on whether scalar given for `loc`
                             'm'  if both `loc`, 'locunits' scalar
+                                    or `locunits` is 'ticksep'
                             'wh' otherwise
                     only allow 'm' if both 'loc', 'locunits' scalar
 
@@ -2867,6 +2873,7 @@ class RectGrid:
         m_scalar=self._is_scalar_loc(loc)*2+\
                  self._is_scalar_locunits(locunits)
         both_scalar=(m_scalar==3)
+        default_mlocing=both_scalar
 
         if both_scalar:  # both loc, locunits scalar
             u=self.grid_dist_by_unit(locunits, axis, loc)
@@ -2874,6 +2881,8 @@ class RectGrid:
         elif m_scalar==2:
             loc=(loc,)*2
         elif m_scalar:
+            if locunits=='ticksep':
+                default_mlocing=True
             locunits=(locunits,)*2
 
         ## loc
@@ -2881,7 +2890,7 @@ class RectGrid:
 
         ## locing
         if locing is None:
-            xlhow=ylhow='m' if both_scalar else 'w'
+            xlhow=ylhow='m' if default_mlocing else 'w'
         else:
             if locing in ['wh', 'xy', 'margin', 'm']:
                 xlhow=ylhow=locing[0]
