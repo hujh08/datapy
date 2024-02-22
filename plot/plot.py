@@ -9,6 +9,7 @@ import numbers
 
 import pandas as pd
 import matplotlib.colors as mcolors
+import seaborn as sns
 
 from ._tools_plot import filter_by_lim, calc_density_map_2d, quants_to_levels
 from .colors import get_next_color_in_cycle
@@ -217,9 +218,14 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
         samestyle=False
 
     ### contour or contourf
-    if (type(fill) is bool and fill) and  ckey!='color':
+    if type(fill) is bool and fill:
         use_contourf=True
         func=ax.contourf
+
+        if ckey=='color':
+            color=kwargs.pop('colors')[0]
+            cmap=sns.light_palette(color, as_cmap=True)
+            kwargs['cmap']=cmap
     else:
         use_contourf=False
         func=ax.contour
@@ -288,16 +294,15 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
             sca.set_label(label)
         else:
             collections=contours.collections
-            if not use_contourf:
-                if samestyle:   # same style for all contour lines
-                    c=collections[0]
-                    c.set_label(label)
+            if samestyle:   # similar style for all contour
+                c=collections[-1]
+                c.set_label(label)
+                update_handler_for_contour(c, fill=use_contourf)
+            elif not use_contourf:
+                for c, l in zip(collections, levels):
+                    s=f'{label}: {l}'
+                    c.set_label(s)
                     update_handler_for_contour(c, fill=False)
-                else:
-                    for c, l in zip(collections, levels):
-                        s=f'{label}: {l}'
-                        c.set_label(s)
-                        update_handler_for_contour(c, fill=False)
             else:
                 lowers=levels[:-1]
                 uppers=levels[1:]
