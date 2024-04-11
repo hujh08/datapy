@@ -131,8 +131,10 @@ def load_txt(fileobj, line_nrow=None, header_comment=False,
         kwargs['usecols']=fields
 
     # load text through `pd.read_csv`
-    df=pd.read_csv(fileobj, delim_whitespace=delim_whitespace,
-                comment=comment, **kwargs)
+    kws1=dict(comment=comment)
+    if delim_whitespace:
+        kws1['sep']=r'\s+'
+    df=pd.read_csv(fileobj, **kws1, **kwargs)
 
     # resume name given in `fields`
     if map_to_srccols is not None:

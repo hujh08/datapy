@@ -492,7 +492,7 @@ def plot_2d_bins(ax, xs, ys, bins=5, binlim=None, binxoy='x',
 
     df=df.dropna()
 
-    dataplt=df.groupby('bin').agg(**aggfuncs)
+    dataplt=df.groupby('bin', observed=True).agg(**aggfuncs)
     dataplt=dataplt[dataplt['cnt']>5]
     dataplt.dropna()
 
