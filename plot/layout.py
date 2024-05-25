@@ -2876,8 +2876,9 @@ class RectGrid:
         default_mlocing=both_scalar
 
         if both_scalar:  # both loc, locunits scalar
-            u=self.grid_dist_by_unit(locunits, axis, loc)
-            loc, locunits=(1,)*2, (u,)*2
+            ux=self.grid_dist_by_unit(locunits, 'x', loc)
+            uy=self.grid_dist_by_unit(locunits, 'y', loc)
+            loc, locunits=(1,)*4, (ux, uy)*2
         elif m_scalar==2:
             loc=(loc,)*2
         elif m_scalar:
