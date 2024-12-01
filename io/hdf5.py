@@ -16,7 +16,8 @@ __all__=['load_hdf5', #'load_hdf5_attrs',
 
 # load hdf5
 def load_hdf5(path_or_obj, fields=None, key_attrs=None, ignore_dset_attrs=True,
-                           dict_for_list_fields=None):
+                           dict_for_list_fields=None,
+                           ignore_nonexists=False):
     '''
         load data in HDF5
 
@@ -161,6 +162,16 @@ def load_hdf5(path_or_obj, fields=None, key_attrs=None, ignore_dset_attrs=True,
                 if True, return dict with key
                     except when nested list given
                         exception raised in this case
+
+            ignore_nonexists: bool, default False
+                whether to ignore nonexists key
+
+                if not ignore,
+                    Exception raised if non-exists
+                otherwise,
+                    nonexists key will skip
+                        except when `dict_for_list_fields`
+                            fill by None for the non-exists
     '''
     # key attrs
     if isinstance(key_attrs, bool):
@@ -168,7 +179,8 @@ def load_hdf5(path_or_obj, fields=None, key_attrs=None, ignore_dset_attrs=True,
 
     kws=dict(key_attrs=key_attrs,
              dict_for_list_fields=dict_for_list_fields,
-             ignore_dset_attrs=ignore_dset_attrs)
+             ignore_dset_attrs=ignore_dset_attrs,
+             ignore_nonexists=ignore_nonexists)
 
     # filename
     if isinstance(path_or_obj, (str, bytes)):
@@ -276,7 +288,8 @@ def _get_data_from_dataset_only_data(dset, fields=None):
     return dset.__getitem__(fields)
 
 ### get data from Group
-def _get_data_from_group(grp, fields=None, dict_for_list_fields=None, **kwargs):
+def _get_data_from_group(grp, fields=None, dict_for_list_fields=None,
+                            ignore_nonexists=False, **kwargs):
     '''
         get data from h5py.Group
 
@@ -292,10 +305,12 @@ def _get_data_from_group(grp, fields=None, dict_for_list_fields=None, **kwargs):
 
     # one field
     if isinstance(fields, (str, bytes)):
-        return _get_data_from_group_by_name(grp, fields, **kwargs)
+        return _get_data_from_group_by_name(grp, fields, **kwargs,
+                                    ignore_nonexists=ignore_nonexists)
 
     # nested structure
-    kws=dict(**kwargs, dict_for_list_fields=dict_for_list_fields)
+    kws=dict(**kwargs, dict_for_list_fields=dict_for_list_fields,
+                ignore_nonexists=ignore_nonexists)
 
     ## dict for `fields`
     if isinstance(fields, dict):
@@ -333,11 +348,15 @@ def _get_data_from_group_total(grp, key_attrs=None, **kwargs):
 
     return res
 
-def _get_data_from_group_by_name(grp, name, key_attrs=None, **kwargs):
+def _get_data_from_group_by_name(grp, name, key_attrs=None,
+                                        ignore_nonexists=False, **kwargs):
     '''
         get sub-Group/Dataset with name `name`
     '''
-    obj=_get_sub_or_attrs_of_group(grp, name, key_attrs=key_attrs)
+    obj=_get_sub_or_attrs_of_group(grp, name, key_attrs=key_attrs,
+                                        ignore_nonexists=ignore_nonexists)
+    if obj is None:
+        return None
 
     # attrs
     if isinstance(obj, h5py.AttributeManager):
@@ -350,7 +369,8 @@ def _get_data_from_group_by_name(grp, name, key_attrs=None, **kwargs):
     return _get_data_from_group_total(obj, key_attrs=key_attrs, **kwargs)
 
 def _get_data_from_group_by_dict(grp, fields, key_attrs=None,
-                                      dict_for_list_fields=None, **kwargs):
+                                      dict_for_list_fields=None,
+                                      ignore_nonexists=False, **kwargs):
     '''
         get data by dict given for `fields`
             key: name of sub-dataset/group in root `grp`
@@ -367,7 +387,10 @@ def _get_data_from_group_by_dict(grp, fields, key_attrs=None,
         if isinstance(v, bool) and not v: # bool False, ignore this key
                 continue
 
-        d=_get_sub_or_attrs_of_group(grp, k, key_attrs=key_attrs)
+        d=_get_sub_or_attrs_of_group(grp, k, key_attrs=key_attrs,
+                                        ignore_nonexists=ignore_nonexists)
+        if d is None:
+            continue
 
         # attrs
         if isinstance(d, h5py.AttributeManager):
@@ -379,8 +402,12 @@ def _get_data_from_group_by_dict(grp, fields, key_attrs=None,
             res[k]=_get_data_from_dataset(d, v, key_attrs=key_attrs, **kwargs)
             continue
 
-        res[k]=_get_data_from_group(d, v, **kwargs, key_attrs=key_attrs,
-                                          dict_for_list_fields=dict_for_list_fields)
+        d1=_get_data_from_group(d, v, **kwargs, key_attrs=key_attrs,
+                                    ignore_nonexists=ignore_nonexists,
+                                    dict_for_list_fields=dict_for_list_fields)
+        if d1 is None:
+            continue
+        res[k]=d1
 
     return res
 
@@ -415,16 +442,23 @@ def _get_data_from_group_by_list(grp, fields, dict_for_list_fields=None, **kwarg
     kws=dict(**kwargs, dict_for_list_fields=dict_for_list_fields)
 
     # get data by list recursively
-    res=[_get_data_from_group(grp, k, **kws) for k in fields]
+    fields_load=[]
+    res=[]
+    for k in fields:
+        d=_get_data_from_group(grp, k, **kws)
+        if d is None and dict_for_list_fields:
+            continue
+        res.append(d)
+        fields_load.append(k)
 
     # True for `dict_for_list_fields`
     if dict_for_list_fields:
-        res=dict(zip(fields, res))
+        res=dict(zip(fields_load, res))
 
     return res
 
 #### auxiliary funcs of group
-def _get_sub_or_attrs_of_group(grp, name, key_attrs=None):
+def _get_sub_or_attrs_of_group(grp, name, key_attrs=None, ignore_nonexists=False):
     '''
         get sub-group/dataset or dataset for a group
     '''
@@ -432,8 +466,11 @@ def _get_sub_or_attrs_of_group(grp, name, key_attrs=None):
         if key_attrs is not None and name==key_attrs:  # only load attrs
             return grp.attrs
 
-        s=f'name "{name}" not exists in group of HDF5 file: {grp.file}'
-        raise ValueError(s)
+        if not ignore_nonexists:
+            s=f'name "{name}" not exists in group of HDF5 file: {grp.file}'
+            raise ValueError(s)
+        else:
+            return None
 
     return grp[name]
 
