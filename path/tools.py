@@ -98,10 +98,10 @@ def find_sub_in_parent(sub, start=None, return_rel=True, find_all=False):
     return result
 
 # add local lib path in parent dir
-def add_lib_in_parent(sub):
+def add_lib_in_parent(sub, start=None, return_rel=False):
     '''
         add local lib path in parent
     '''
-    libdir=find_sub_in_parent(sub, return_rel=True)
+    libdir=find_sub_in_parent(sub, start=start, return_rel=return_rel)
     if libdir not in sys.path:
-        sys.path.append(libdir)
+        sys.path.insert(0, libdir)  # insert add first to search
