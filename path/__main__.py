@@ -83,9 +83,8 @@ subparser.set_defaults(func=handle_join_path)
 
 ## parent path
 def handle_parent(args):
-    sub=args.sub
-    find_all=args.all
-    p=find_sub_in_parent(sub, find_all=find_all,
+    sub, find_all=args.sub, args.all
+    p=find_sub_in_parent(sub, start=args.start, find_all=find_all,
                             return_rel=(not args.abspath))
     if p is None:
         raise FileNotFoundError(f"'{sub}' not found in parent")
@@ -101,6 +100,8 @@ subparser=subparsers.add_parser('parent',
                                 help='sub path in parent')
 
 subparser.add_argument('sub', help='sub path to search in parent')
+subparser.add_argument('start', help='starting path to search',
+                            nargs='?', default=None)
 subparser.add_argument('-b', '--abspath',
                             help='output abs path. default rel path',
                             action='store_true')

@@ -46,7 +46,7 @@ def rebase_relpath(path, newbase, oldbase='.'):
     return os.path.relpath(path, newbase)
 
 # parent path containing given sub file
-def find_sub_in_parent(sub, return_rel=True, find_all=False):
+def find_sub_in_parent(sub, start=None, return_rel=True, find_all=False):
     '''
         find `sub` in parent path of PWD
             and then join them
@@ -55,8 +55,14 @@ def find_sub_in_parent(sub, return_rel=True, find_all=False):
             path of sub if found
             None otherwise
 
+        :param start: optional, Path-like
+            starting path to search sub
+
+            if not given, use `os.getcwd()`
+
         :param return_rel: bool, default True
-            if True, return relative path to PWD
+            if True, return relative path to pwd
+                not rel to `start`
             otherwise, return absolute path
 
         :param find_all: bool, default True
@@ -65,10 +71,10 @@ def find_sub_in_parent(sub, return_rel=True, find_all=False):
     '''
     result=[]
 
-    pwd=os.getcwd()
+    if start is None: start=''
 
     visited=set()
-    current=pwd
+    current=os.path.abspath(start)
     while current not in visited:
         subcurr=os.path.join(current, sub)
 
@@ -84,7 +90,7 @@ def find_sub_in_parent(sub, return_rel=True, find_all=False):
         return None
 
     if return_rel:
-        result=[os.path.relpath(p, pwd) for p in result]
+        result=[os.path.relpath(p) for p in result]
 
     if not find_all:
         return result[0]
