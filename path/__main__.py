@@ -35,7 +35,8 @@ subparser=subparsers.add_parser('relpath',
                                 help='relative path')
 
 subparser.add_argument('path', help='target path in file system')
-subparser.add_argument('srcpath', help='src path for relpath')
+subparser.add_argument('srcpath', help='src path for relpath',
+                            nargs='?')
 
 subparser.set_defaults(func=handle_relpath)
 
