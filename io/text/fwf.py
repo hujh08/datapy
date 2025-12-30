@@ -16,7 +16,7 @@ __all__=['load_fwf',
          'save_to_fwf']
 
 # load fwf
-def load_fwf(file_or_buffer, colspec='infer', header=None,
+def load_fwf(file_or_buffer, colspecs='infer', header=None,
                              **kwargs):
     '''
         read fixed-width formatted text
@@ -25,13 +25,13 @@ def load_fwf(file_or_buffer, colspec='infer', header=None,
             except some default parameters reset
 
         default parameters:
-            colspec: 'infer'
+            colspecs: 'infer'
                 see `pd.read_fwf` for details
 
             header: None
                 no header specified
     '''
-    kwargs.update(colspec=colspec, header=header)
+    kwargs.update(colspecs=colspecs, header=header)
     return pd.read_fwf(file_or_buffer, **kwargs)
 
 # load fwf with readme doc
@@ -39,7 +39,7 @@ def load_fwf_by_header(file_or_buffer, header=0, align='left', **kwargs):
     '''
         load fwf with a header
 
-        colspec is given by header
+        colspecs is given by header
     '''
     lhdr=read_nth_line(file_or_buffer, header, restore_stream=True)
     colspecs, names=parse_aligned_header(lhdr, align=align)
