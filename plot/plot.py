@@ -262,12 +262,12 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
     if not use_contourf:
         if type(fill) is bool:
             if fill:
-                contours.collections[0].set_fc('white')
+                contours.get_paths()[0].set_fc('white')
         else:
             if isinstance(fill, str) or len(fill) in [3, 4]:
                 raise ValueError(
                     f'only bool or color str/array for `fill`, but got: {fill}')
-            contours.collections[0].set_fc(fill)
+            collections_of_contour(contours)[0].set_fc(fill)
 
     # plot points scatter
     sca=None
@@ -275,7 +275,7 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
         if remove_covered:
             xys=np.column_stack([xs, ys])
 
-            pathcol=contours.collections[0]
+            pathcol=collections_of_contour(contours)[0]
             for path in pathcol.get_paths():
                 m=path.contains_points(xys)
                 xys=xys[~m]
@@ -293,7 +293,8 @@ def plot_2d_contour(ax, *args, kde=False, bins=None,
         if label_points and sca is not None:
             sca.set_label(label)
         else:
-            collections=contours.collections
+            # collections=contours.collections
+            collections=collections_of_contour(contours)
             if samestyle:   # similar style for all contour
                 c=collections[-1]
                 c.set_label(label)
@@ -587,3 +588,18 @@ def imshow_boolmat(ax, bmat, color='red', alpha=None, **kwargs):
     bounds=[0.5, 1.5]
     norm=mcolors.BoundaryNorm(bounds, cmap.N)
     ax.imshow(bmat, **kwargs, norm=norm, cmap=cmap)
+
+# auxiliary funcs
+def collections_of_contour(cs):
+    '''
+        solve compatible problem:
+            MatplotlibDeprecationWarning:
+                The collections attribute was deprecated in Matplotlib 3.8
+                    and will be removed two minor releases later.
+    '''
+    # return cs.collections  # deprecated
+    paths=cs.get_paths()
+
+    label=cs.get_label()
+    from matplotlib.patches import PathPatch
+    return [PathPatch(p, label=label) for p in paths]
